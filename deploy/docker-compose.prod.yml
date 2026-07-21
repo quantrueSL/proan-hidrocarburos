@@ -1,0 +1,76 @@
+# =============================================================================
+# proan-Hidrocarburos — stack de PRODUCCIÓN (en un host con docker + nginx/TLS).
+#
+# Para Cloud Run se despliegan los servicios por separado (ver README); este
+# compose es para un despliegue clásico en VM, espejo del de Maka pero recortado.
+#
+#   docker compose -f deploy/docker-compose.prod.yml up --build -d
+# =============================================================================
+
+name: carb
+
+services:
+  carb-financialbi:
+    container_name: carb-financialbi
+    image: carb-financialbi:prod
+    build:
+      context: ..
+      dockerfile: apps/financialbi/Dockerfile
+    expose:
+      - "8091"
+    env_file:
+      - ../config/financialbi.env
+    environment:
+      - LLM_API_URL=${LLM_API_URL:-https://generativelanguage.googleapis.com/v1beta/openai}
+      - LLM_MODEL_ID=${LLM_MODEL_ID:-gemini-3.1-flash-lite}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+    volumes:
+      - ../config:/app/config:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8091/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - carb_net
+    restart: unless-stopped
+
+  carb-frontend:
+    container_name: carb-frontend
+    image: carb-frontend:prod
+    build:
+      context: ..
+      dockerfile: apps/frontend/Dockerfile.prod
+    expose:
+      - "3000"
+    depends_on:
+      - carb-financialbi
+    environment:
+      - FINANCIALBI_SERVICE_URL=http://carb-financialbi:8091
+      - HTPASSWD_PATH=/etc/carb/.htpasswd
+      - SESSION_COOKIE_NAME=carb_session
+      - SESSION_COOKIE_SECURE=true
+    volumes:
+      - ./nginx/.htpasswd:/etc/carb/.htpasswd:ro
+    networks:
+      - carb_net
+    restart: unless-stopped
+
+  carb-nginx:
+    container_name: carb-nginx
+    image: nginx:latest
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/ssl:/etc/ssl:ro
+    depends_on:
+      - carb-frontend
+    networks:
+      - carb_net
+    restart: unless-stopped
+
+networks:
+  carb_net:
+    name: carb_net

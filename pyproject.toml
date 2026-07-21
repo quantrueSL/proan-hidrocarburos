@@ -1,0 +1,28 @@
+# ---------------------------------------------------------------------------
+# uv workspace root — proan-Hidrocarburos
+# ---------------------------------------------------------------------------
+# Derivado del monorepo de Maka, pero recortado a lo imprescindible: solo el
+# servicio financialbi (reportes + alertas). El frontend (apps/frontend) es
+# Node/pnpm y NO forma parte de este workspace de Python.
+#
+#   uv sync                      → instala todos los miembros
+#   uv sync --package financialbi → instala solo el backend y sus deps
+#   uv lock                      → regenera uv.lock tras cambiar dependencias
+# ---------------------------------------------------------------------------
+
+[project]
+name = "carb-workspace"
+version = "0.0.0"
+requires-python = ">=3.11,<3.12"
+
+[tool.uv.workspace]
+members = [
+    "apps/financialbi",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.uv]

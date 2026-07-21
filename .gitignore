@@ -1,0 +1,52 @@
+# =============================================================================
+# Secretos y credenciales — NUNCA subir
+# =============================================================================
+.env
+.env.*
+!.env.example
+config/bq_credentials.json
+# Certificados / claves TLS de producción
+deploy/nginx/ssl/*
+!deploy/nginx/ssl/.gitkeep
+*.key
+*.crt
+*.pem
+*.cer
+*.p12
+*.pfx
+
+# El .htpasswd real NO se versiona (contiene hashes de contraseñas).
+# Se versiona solo deploy/nginx/.htpasswd.example; al clonar:
+#   cp deploy/nginx/.htpasswd.example deploy/nginx/.htpasswd
+deploy/nginx/.htpasswd
+
+# =============================================================================
+# Python
+# =============================================================================
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# =============================================================================
+# Node / Next.js
+# =============================================================================
+node_modules/
+.next/
+out/
+.pnpm-store/
+npm-debug.log*
+pnpm-debug.log*
+
+# =============================================================================
+# Sistema operativo / editor
+# =============================================================================
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
