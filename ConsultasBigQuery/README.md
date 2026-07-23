@@ -43,17 +43,38 @@ y `HCARB_GOLD_VALIDACION_SAP` (D60).
 ![Linaje de tablas: fuentes → queries → HCARB_*](./linaje-tablas.png)
 
 Fuente editable en [`linaje-tablas.mmd`](./linaje-tablas.mmd). Para
-regenerar: `npx -y @mermaid-js/mermaid-cli -i linaje-tablas.mmd -o linaje-tablas.png -b white -s 2`
+regenerar cualquiera de los `.mmd` de esta carpeta (este y los dos de más
+abajo): `npx -y @mermaid-js/mermaid-cli -i <archivo>.mmd -o <archivo>.png -b white -s 2`
 
 Pensado para quedar como tasks de un DAG de **Airflow** — no Cloud Run Job
 como el patrón `materialize_alerts.py` de Maka. Por ahora se corre a mano
 para el backfill histórico.
 
-## Qué NO está aquí
+## Tablas mutables (no construidas por una query de esta carpeta)
 
-- `HCARB_gold_aprobacion` — tabla mutable del **backend** (dos roles:
-  Compras/Gerencia), no una query de cálculo.
-- `HCARB_ESTATUS_SAT` — poblada por una task de Airflow que llama al
-  webservice del SAT, no por un `SELECT` sobre BigQuery.
+`HCARB_gold_aprobacion` y `HCARB_ESTATUS_SAT` viven en el mismo dataset
+(`D60_REPORTING`) pero **no las reconstruye ningún `SELECT` de aquí** —
+las escribe el backend directamente (INSERT/UPDATE/MERGE fila a fila) según
+acciones humanas o llamadas a un webservice externo. Por eso no hay un
+`HCARB_*.sql` "de cálculo" para ellas, pero sí dejamos versionado lo que sí
+es reutilizable sin leer Python:
 
-Detalle de ambas en `Datos/PHASE2/Esquema.md` §4-5.
+- **`HCARB_gold_aprobacion`** (Módulo 3, dos roles: Compras/Gerencia) —
+  esquema + máquina de estados completa en
+  [`HCARB_gold_aprobacion_schema.sql`](./HCARB_gold_aprobacion_schema.sql),
+  diagrama en [`flujo-aprobacion.png`](./flujo-aprobacion.png) (fuente
+  [`flujo-aprobacion.mmd`](./flujo-aprobacion.mmd)). La escribe
+  `apps/financialbi/financialbi/aprobacion_engine.py`.
+- **`HCARB_ESTATUS_SAT`** (D24, estatus de cancelación ante el SAT) —
+  esquema + mecánica en
+  [`HCARB_estatus_sat_schema.sql`](./HCARB_estatus_sat_schema.sql), diagrama
+  en [`flujo-estatus-sat.png`](./flujo-estatus-sat.png) (fuente
+  [`flujo-estatus-sat.mmd`](./flujo-estatus-sat.mmd)). La escribe
+  `apps/financialbi/financialbi/estatus_sat.py`, corriendo hoy a mano
+  (`python -m financialbi.estatus_sat`) hasta que exista el DAG de Airflow.
+
+`linaje-tablas.png` ya las incluye (subgrafo "Tablas mutables", con flechas
+punteadas para distinguirlas de las tablas que sí construye una query).
+
+Detalle narrativo adicional (no versionado en git) en
+`Datos/PHASE2/Esquema.md` §4-5.

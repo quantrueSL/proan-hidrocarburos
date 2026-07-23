@@ -1,0 +1,25 @@
+stateDiagram-v2
+    [*] --> pendiente_validacion_compras: sync_pendientes (alta desde M1)
+
+    pendiente_validacion_compras --> pendiente_aprobacion_gerencia: capturar_compras (Compras CECO+sitio)
+    pendiente_aprobacion_gerencia --> pendiente_aprobacion_gerencia: capturar_compras (Compras re-edita)
+    pendiente_aprobacion_gerencia --> aprobada: aprobar_gerencia (Gerencia)
+    pendiente_validacion_compras --> rechazada: rechazar (rol Compras)
+    pendiente_aprobacion_gerencia --> rechazada: rechazar (rol Gerencia)
+
+    pendiente_aprobacion_gerencia --> pendiente_validacion_compras: reabrir
+    aprobada --> pendiente_validacion_compras: reabrir
+    rechazada --> pendiente_validacion_compras: reabrir
+
+    aprobada --> [*]: M4 pago (aparcado)
+    rechazada --> [*]
+
+    note right of pendiente_validacion_compras
+        CECO siempre manual.
+        Sitio manual solo si M2 no lo dedujo.
+    end note
+
+    note right of rechazada
+        Sin control de rol (D27):
+        cualquiera reabre cualquier factura.
+    end note

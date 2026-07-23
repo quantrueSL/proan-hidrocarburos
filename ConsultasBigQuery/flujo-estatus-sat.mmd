@@ -1,0 +1,22 @@
+flowchart TD
+    folio[("HCARB_GOLD_CLASIFICACION_FOLIO")]
+    aprob[("HCARB_gold_aprobacion")]
+    sat[("HCARB_ESTATUS_SAT")]
+
+    folio --> candidatos{"sin fila todavia,<br/>o consultada hace mas de 7 dias<br/>y no aprobada"}
+    aprob --> candidatos
+
+    candidatos --> soap["POST SOAP a<br/>ConsultaCFDIService.svc<br/>(expresionImpresa)"]
+    soap --> estado{"Estado"}
+
+    estado -->|Vigente| mvig["MERGE estatus=vigente"]
+    estado -->|Cancelado| mcan["MERGE estatus=cancelado"]
+    estado -->|No Encontrado| mnoenc["MERGE estatus=no_encontrado"]
+    soap -->|"error de red<br/>(sin respuesta)"| skip["no se guarda fila,<br/>vuelve a ser candidata"]
+
+    mvig --> sat
+    mcan --> sat
+    mnoenc --> sat
+
+    corrida["Corrida 2026-07-23:<br/>1.027 contrastadas -><br/>1.033 vigentes, 13 canceladas,<br/>1 no encontrada, 4 sin respuesta"]
+    sat -.-> corrida

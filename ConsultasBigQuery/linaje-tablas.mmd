@@ -16,11 +16,19 @@ flowchart LR
         q3(["HCARB_gold_validacion_sap.sql"])
     end
 
-    subgraph Tablas["Tablas HCARB_* generadas"]
+    subgraph Tablas["Tablas HCARB_* generadas (por query)"]
         stg_vendors["D50.HCARB_STG_VENDORS"]
         gold_folio["D60.HCARB_GOLD_CLASIFICACION_FOLIO"]
         gold_sap["D60.HCARB_GOLD_VALIDACION_SAP"]
     end
+
+    subgraph Mutables["Tablas HCARB_* mutables (por backend, no query)"]
+        gold_aprob["D60.HCARB_gold_aprobacion"]
+        estatus_sat["D60.HCARB_ESTATUS_SAT"]
+    end
+
+    backend["Backend FastAPI<br/>(aprobacion_engine.py)"]
+    webservice["Webservice SAT<br/>(estatus_sat.py)"]
 
     dm_vendors --> q1
     q1 --> stg_vendors
@@ -37,3 +45,10 @@ flowchart LR
     material --> q3
     mseg --> q3
     q3 --> gold_sap
+
+    gold_folio -.-> backend
+    backend -.->|INSERT/UPDATE por acción de Compras/Gerencia| gold_aprob
+
+    gold_folio -.-> webservice
+    gold_aprob -.-> webservice
+    webservice -.->|MERGE por resultado del SOAP| estatus_sat
