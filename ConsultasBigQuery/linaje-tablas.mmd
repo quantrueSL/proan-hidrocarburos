@@ -1,0 +1,39 @@
+flowchart LR
+    subgraph Fuentes["Fuentes (BigQuery, Fase 1)"]
+        dm_vendors["D20_DIMENSION.dm_vendors"]
+        cfdis["D00_SANDBOX.cfdis"]
+        bkpf["D30_INTEGRATION.bkpf_account_document_header"]
+        ekbe["D30_INTEGRATION.sap_ekbe"]
+        po["D30_INTEGRATION.sap_purchasing_orders"]
+        centros["D20_DIMENSION.dm_centros"]
+        material["D20_DIMENSION.dm_material"]
+        mseg["D00_SANDBOX.proan_MSEG_HIDROCARBUROS_20260714"]
+    end
+
+    subgraph Queries["ConsultasBigQuery/"]
+        q1(["HCARB_stg_vendors.sql"])
+        q2(["HCARB_gold_clasificacion.sql"])
+        q3(["HCARB_gold_validacion_sap.sql"])
+    end
+
+    subgraph Tablas["Tablas HCARB_* generadas"]
+        stg_vendors["D50.HCARB_STG_VENDORS"]
+        gold_folio["D60.HCARB_GOLD_CLASIFICACION_FOLIO"]
+        gold_sap["D60.HCARB_GOLD_VALIDACION_SAP"]
+    end
+
+    dm_vendors --> q1
+    q1 --> stg_vendors
+
+    cfdis --> q2
+    stg_vendors --> q2
+    q2 --> gold_folio
+
+    gold_folio --> q3
+    bkpf --> q3
+    ekbe --> q3
+    po --> q3
+    centros --> q3
+    material --> q3
+    mseg --> q3
+    q3 --> gold_sap

@@ -7115,3 +7115,292 @@ body.proan-report-assistant-open .proan-content-scroll {
     grid-template-columns: 1fr;
   }
 }
+
+/* Hidrocarburos: bandeja operativa M1/M2. */
+.hydro-page { display: grid; gap: 18px; max-width: 1500px; margin: 0 auto; padding: 8px 0 28px; }
+.hydro-header p, .hydro-header span, .hydro-kpi span, .hydro-kpi small, .hydro-table-title p { color: var(--muted, #64748b); }
+.hydro-header p { margin: 0 0 4px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.hydro-header h1 { margin: 0; font-size: clamp(28px, 4vw, 38px); }
+.hydro-header span { display: block; margin-top: 5px; }
+.hydro-filters, .hydro-table-card, .hydro-kpi { border: 1px solid #dce3ea; border-radius: 14px; background: #fff; box-shadow: 0 2px 8px rgba(15, 23, 42, .04); }
+.hydro-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; padding: 14px; }
+.hydro-filters label { display: grid; gap: 5px; color: #475569; font-size: 12px; font-weight: 700; }
+.hydro-filters input, .hydro-filters select { min-height: 36px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; padding: 0 9px; color: #172033; }
+.hydro-filter-actions { display: flex; gap: 10px; align-items: center; }
+.hydro-button, .hydro-pagination button { border: 0; border-radius: 7px; background: #0d5c50; color: #fff; cursor: pointer; font-weight: 700; padding: 10px 14px; }
+.hydro-button:disabled, .hydro-pagination button:disabled { cursor: not-allowed; opacity: .5; }
+.hydro-link-button { border: 0; background: transparent; color: #0d5c50; cursor: pointer; font-weight: 700; padding: 8px; }
+.hydro-kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1px; overflow: hidden; background: #dce3ea; }
+.hydro-kpi { min-width: 0; border: 0; border-radius: 0; box-shadow: none; padding: 15px; }
+.hydro-kpi span, .hydro-kpi small { display: block; font-size: 12px; }
+.hydro-kpi strong { display: block; margin: 5px 0; font-size: 20px; white-space: nowrap; }
+.hydro-table-card { overflow: hidden; }
+.hydro-table-title { display: flex; justify-content: space-between; padding: 16px 18px 8px; }
+.hydro-table-title h2 { margin: 0; font-size: 18px; }.hydro-table-title p { margin: 4px 0 0; font-size: 13px; }
+.hydro-table-wrap { overflow-x: auto; }.hydro-table-wrap table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.hydro-table-wrap th { background: #f8fafc; color: #475569; font-size: 11px; letter-spacing: .04em; text-align: left; text-transform: uppercase; }
+.hydro-table-wrap th, .hydro-table-wrap td { border-top: 1px solid #e2e8f0; padding: 12px 14px; vertical-align: middle; }
+.hydro-table-wrap tbody tr { cursor: pointer; }.hydro-table-wrap tbody tr:hover, .hydro-table-wrap tbody tr:focus { background: #f0fdf9; outline: none; }
+.hydro-badge { display: inline-block; border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 700; white-space: nowrap; }.hydro-badge.is-ok { background: #dcfce7; color: #166534; }.hydro-badge.is-review { background: #fef3c7; color: #92400e; }
+.hydro-pagination { display: flex; justify-content: center; align-items: center; gap: 12px; border-top: 1px solid #e2e8f0; padding: 12px; font-size: 13px; }.hydro-pagination button { padding: 7px 10px; }
+.hydro-error { margin: 0; border-radius: 8px; background: #fef2f2; color: #b91c1c; padding: 11px 13px; }.hydro-empty, .hydro-muted { color: #64748b; padding: 16px; }
+.hydro-detail { position: fixed; z-index: 20; top: 0; right: 0; width: min(480px, 100vw); height: 100vh; overflow-y: auto; background: #fff; box-shadow: -10px 0 32px rgba(15, 23, 42, .2); }.hydro-detail-header { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid #e2e8f0; padding: 22px; }.hydro-detail-header p { margin: 0; color: #64748b; font-size: 12px; }.hydro-detail-header h2 { margin: 4px 0 0; }.hydro-detail-header button { border: 0; background: transparent; color: #475569; cursor: pointer; font-size: 30px; line-height: 1; }.hydro-detail-body { display: grid; gap: 20px; padding: 22px; }.hydro-detail-body h3 { margin: 0 0 10px; font-size: 15px; }.hydro-detail-body dl { display: grid; grid-template-columns: minmax(110px, .8fr) minmax(0, 1.4fr); gap: 8px 12px; margin: 0; font-size: 13px; }.hydro-detail-body dt { color: #64748b; }.hydro-detail-body dd { margin: 0; overflow-wrap: anywhere; }.hydro-uuid { font-family: monospace; font-size: 11px; }
+@media (max-width: 1100px) { .hydro-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 680px) { .hydro-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }.hydro-filters label { width: calc(50% - 6px); }.hydro-filters input, .hydro-filters select { width: 100%; }.hydro-filter-actions { width: 100%; }.hydro-table-wrap th, .hydro-table-wrap td { white-space: nowrap; }.hydro-detail-body dl { grid-template-columns: 1fr; gap: 3px; }.hydro-detail-body dd { margin-bottom: 8px; } }
+
+/* Hidrocarburos: consola operativa, no página de informe. */
+.hydro-page { width: 100%; max-width: none; gap: 20px; margin: 0; padding: 6px 4px 32px; }
+.hydro-header { display: flex; align-items: flex-end; justify-content: space-between; min-height: 112px; padding: 8px 2px 20px; border-bottom: 1px solid #dedbd4; }
+.hydro-header p { margin: 0 0 8px; color: #9a572f; font-family: var(--font-proan-primary); font-size: 11px; font-weight: 800; letter-spacing: .14em; }
+.hydro-header h1 { margin: 0; color: #25272c; font-family: var(--font-proan-primary); font-size: clamp(30px, 3vw, 42px); font-weight: 650; letter-spacing: -.035em; line-height: 1.02; }
+.hydro-header span { margin-top: 8px; color: #70747b; font-size: 14px; }
+.hydro-filters { display: flex; align-items: flex-end; gap: 14px; border: 1px solid #e2ddd5; border-radius: 12px; background: #fffefd; box-shadow: 0 8px 18px rgba(47, 34, 16, .035); padding: 13px 16px; }
+.hydro-filters label { flex: 0 1 190px; min-width: 125px; gap: 6px; color: #6b6258; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.hydro-filters label:nth-child(1), .hydro-filters label:nth-child(2) { flex-basis: 140px; }
+.hydro-filters input, .hydro-filters select { width: 100%; min-height: 38px; border: 1px solid #ded9d1; border-radius: 7px; background: #fff; color: #2d302f; font-size: 13px; font-weight: 600; }
+.hydro-filters input:focus, .hydro-filters select:focus { border-color: #bd6b38; box-shadow: 0 0 0 3px rgba(222, 113, 46, .12); outline: 0; }
+.hydro-filter-actions { margin-left: auto; padding-bottom: 0; }.hydro-button { border-radius: 7px; background: #225f52; box-shadow: none; font-size: 13px; padding: 11px 16px; }.hydro-button:hover:not(:disabled) { background: #17483e; }.hydro-link-button { color: #6b6258; font-size: 12px; }.hydro-link-button:hover { color: #a95629; }
+.hydro-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; overflow: visible; background: transparent; }.hydro-kpi { min-height: 116px; border: 1px solid #e5e0d8; border-radius: 10px; background: #fff; box-shadow: 0 5px 12px rgba(47, 34, 16, .025); padding: 15px 16px; }.hydro-kpi:hover { border-color: #d7bca9; }.hydro-kpi span { color: #787269; font-size: 11px; font-weight: 700; }.hydro-kpi strong { color: #292d2c; font-family: var(--font-proan-primary); font-size: clamp(20px, 1.7vw, 27px); font-weight: 700; letter-spacing: -.035em; }.hydro-kpi small { color: #9a938a; font-size: 10px; }
+.hydro-table-card { border: 1px solid #e2ddd5; border-radius: 12px; background: #fff; box-shadow: 0 8px 18px rgba(47, 34, 16, .035); }.hydro-table-title { align-items: end; padding: 18px 20px 15px; }.hydro-table-title h2 { color: #303230; font-family: var(--font-proan-primary); font-size: 18px; font-weight: 700; letter-spacing: -.02em; }.hydro-table-title p { color: #9a572f; font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }.hydro-table-title > div + * { color: #777068; font-size: 12px; font-weight: 700; }
+.hydro-table-wrap th { border-top-color: #e8e4de; background: #f7f5f1; color: #777068; font-size: 10px; font-weight: 800; }.hydro-table-wrap th, .hydro-table-wrap td { border-top-color: #eeeae4; padding: 13px 16px; }.hydro-table-wrap td { color: #343735; font-size: 13px; }.hydro-table-wrap tbody tr:hover, .hydro-table-wrap tbody tr:focus { background: #fbf7f2; }.hydro-table-wrap td:nth-child(4) { font-weight: 750; text-align: right; }.hydro-badge { padding: 5px 8px; font-size: 10px; }.hydro-badge.is-ok { background: #e8f3ee; color: #27694f; }.hydro-badge.is-review { background: #fbecd8; color: #9a572f; }
+.hydro-pagination { justify-content: flex-end; border-top-color: #eeeae4; padding: 12px 16px; color: #777068; }.hydro-pagination button { border: 1px solid #dcd7cf; background: #fff; color: #4a514d; font-size: 12px; padding: 7px 11px; }.hydro-pagination button:not(:disabled):hover { border-color: #b26c43; color: #93461f; }
+.hydro-unavailable { display: flex; align-items: center; justify-content: space-between; gap: 18px; border: 1px solid #edcfbf; border-radius: 12px; background: #fff9f5; padding: 20px 22px; }.hydro-unavailable b { color: #763719; font-family: var(--font-proan-primary); font-size: 16px; }.hydro-unavailable p { margin: 5px 0 0; color: #786a60; }.hydro-unavailable code { border-radius: 4px; background: #f4e5da; padding: 2px 5px; color: #713e22; }
+@media (max-width: 1200px) { .hydro-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }.hydro-filters { align-items: end; }.hydro-filter-actions { margin-left: 0; } }
+@media (max-width: 720px) { .hydro-header { min-height: 0; }.hydro-filters { display: grid; grid-template-columns: 1fr 1fr; }.hydro-filters label { width: auto; }.hydro-filter-actions { grid-column: 1 / -1; }.hydro-unavailable { align-items: flex-start; flex-direction: column; }.hydro-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Hidrocarburos: cada módulo prioriza únicamente los controles y métricas propios. */
+.hydro-module-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(178px, 1fr)); gap: 12px; }
+.hydro-module-kpis .hydro-kpi { min-height: 116px; }
+.hydro-page > .hydro-kpis { display: none; }
+.hydro-page[data-module="m1"] > .hydro-table-card:not(.hydro-module-table) { display: none; }
+.hydro-table-title span { display: block; margin-top: 6px; color: #777068; font-size: 12px; }
+.hydro-table-title h2 { font-size: 20px; }
+.hydro-detail--m1 .hydro-detail-body section:not(:first-child), .hydro-detail--m2 .hydro-detail-body section:first-child { display: none; }
+.hydro-page[data-module="m1"] .hydro-header p, .hydro-page[data-module="m2"] .hydro-header p { font-size: 0; }
+.hydro-page[data-module="m1"] .hydro-header p::after, .hydro-page[data-module="m2"] .hydro-header p::after { font-size: 11px; }
+.hydro-page[data-module="m1"] .hydro-header p::after { content: "HIDROCARBUROS · M1"; }
+.hydro-page[data-module="m2"] .hydro-header p::after { content: "HIDROCARBUROS · M2"; }
+.hydro-page[data-module="m1"] .hydro-header h1, .hydro-page[data-module="m2"] .hydro-header h1 { font-size: 0; }
+.hydro-page[data-module="m1"] .hydro-header h1::after, .hydro-page[data-module="m2"] .hydro-header h1::after { font-size: clamp(30px, 3vw, 42px); }
+.hydro-page[data-module="m1"] .hydro-header h1::after { content: "Clasificación CFDI"; }
+.hydro-page[data-module="m2"] .hydro-header h1::after { content: "Validación SAP"; }
+.hydro-page[data-module="m1"] .hydro-header span, .hydro-page[data-module="m2"] .hydro-header span { font-size: 0; }
+.hydro-page[data-module="m1"] .hydro-header span::after, .hydro-page[data-module="m2"] .hydro-header span::after { color: #70747b; font-size: 14px; }
+.hydro-page[data-module="m1"] .hydro-header span::after { content: "Identifica el gasto de gas y separa las facturas con conceptos mixtos."; }
+.hydro-page[data-module="m2"] .hydro-header span::after { content: "Comprueba el registro de cada factura contra SAP, sitio y recepción MSEG."; }
+.hydro-page[data-module="m2"] > .hydro-table-card:not(.hydro-module-table) .hydro-table-title h2 { font-size: 0; }
+.hydro-page[data-module="m2"] > .hydro-table-card:not(.hydro-module-table) .hydro-table-title h2::after { content: "Facturas por validar"; font-size: 20px; }
+@media (max-width: 720px) { .hydro-module-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Hidrocarburos: densidad operativa y superficies más sobrias. */
+@media (min-width: 981px) {
+  .proan-shell { grid-template-columns: 196px minmax(0, 1fr); }
+  .proan-sidebar { width: 196px; padding: 12px 10px; }
+  .proan-sidebar-link { justify-content: flex-start; gap: 10px; min-height: 42px; padding: 9px 11px; border-radius: 10px; text-align: left; }
+  .proan-sidebar-link-label { display: block; min-width: 0; font-size: 12px; letter-spacing: .01em; }
+  .proan-sidebar-link-icon { width: 18px; height: 18px; }
+}
+
+.hydro-page { gap: 16px; }
+.hydro-header { min-height: 96px; padding-bottom: 16px; }
+.hydro-filters { gap: 10px; border-color: #dfd9cf; border-radius: 10px; background: rgba(255, 254, 251, .62); box-shadow: none; padding: 8px 12px; }
+.hydro-filters label { flex-basis: 168px; min-width: 112px; gap: 4px; font-size: 9px; }
+.hydro-filters label:nth-child(1), .hydro-filters label:nth-child(2) { flex-basis: 132px; }
+.hydro-filters input, .hydro-filters select { min-height: 34px; border-radius: 6px; background: rgba(255, 255, 255, .78); font-size: 12px; }
+.hydro-filter-actions { gap: 8px; }
+.hydro-button { border-radius: 6px; font-size: 12px; padding: 8px 12px; }
+.hydro-link-button { font-size: 11px; padding: 7px 6px; }
+
+.hydro-module-kpis { gap: 0; overflow: hidden; border: 1px solid #dfd9cf; border-radius: 10px; background: rgba(244, 240, 232, .78); }
+.hydro-module-kpis .hydro-kpi { min-height: 82px; border: 0; border-right: 1px solid #dfd9cf; border-radius: 0; background: transparent; box-shadow: none; padding: 12px 16px; }
+.hydro-module-kpis .hydro-kpi:last-child { border-right: 0; }
+.hydro-module-kpis .hydro-kpi:hover { border-color: #dfd9cf; background: rgba(255, 255, 255, .28); }
+.hydro-module-kpis .hydro-kpi span { font-size: 10px; }
+.hydro-module-kpis .hydro-kpi strong { margin: 3px 0 0; font-size: clamp(20px, 1.55vw, 25px); }
+
+.hydro-table-card { border-color: #dfd9cf; border-radius: 10px; background: rgba(255, 254, 251, .68); box-shadow: none; }
+.hydro-table-title { padding: 14px 18px 12px; }
+.hydro-table-title h2 { font-size: 18px; }
+.hydro-table-wrap th { background: rgba(241, 237, 230, .78); }
+.hydro-table-wrap th, .hydro-table-wrap td { padding: 11px 16px; }
+.hydro-table-wrap tbody tr:nth-child(even) { background: rgba(248, 245, 239, .48); }
+.hydro-table-wrap tbody tr:hover, .hydro-table-wrap tbody tr:focus { background: rgba(247, 229, 213, .55); }
+.hydro-pagination { padding: 10px 14px; }
+
+@media (max-width: 980px) {
+  .hydro-module-kpis .hydro-kpi { border-right: 0; border-bottom: 1px solid #dfd9cf; }
+}
+
+/* Hidrocarburos: vista de trabajo de una pantalla. */
+@media (min-width: 981px) {
+  .proan-shell { grid-template-columns: 84px minmax(0, 1fr); }
+  .proan-sidebar { width: 84px; padding: 12px 8px; }
+  .proan-sidebar-link { justify-content: center; min-height: 40px; padding: 8px; border-radius: 9px; }
+  .proan-sidebar-link-label { font-size: 12px; font-weight: 800; letter-spacing: .04em; }
+}
+
+.hydro-button { background: #dc6b2b; }
+.hydro-button:hover:not(:disabled) { background: #bd5420; }
+.hydro-header p, .hydro-table-title p { color: #c75c27; }
+.hydro-module-kpis { background: linear-gradient(90deg, rgba(235, 218, 202, .75), rgba(247, 243, 236, .88)); }
+.hydro-module-kpis .hydro-kpi { position: relative; }
+.hydro-module-kpis .hydro-kpi::before { position: absolute; top: 0; right: 0; left: 0; height: 2px; background: #df712e; content: ""; opacity: .72; }
+.hydro-module-kpis .hydro-kpi span { color: #8b5234; }
+
+.hydro-badge { display: inline-flex; align-items: center; gap: 5px; border: 1px solid transparent; border-radius: 5px; font-size: 9px; font-weight: 800; letter-spacing: .015em; padding: 4px 7px; }
+.hydro-badge::before { display: inline-grid; width: 12px; height: 12px; place-items: center; border-radius: 50%; font-size: 8px; font-weight: 900; content: ""; }
+.hydro-badge.is-ok { border-color: #cbe3d7; background: #edf6f1; color: #1d6a4d; }
+.hydro-badge.is-ok::before { background: #2c8060; color: white; content: "✓"; }
+.hydro-badge.is-review { border-color: #f0d5b8; background: #fff6e9; color: #a14d1f; }
+.hydro-badge.is-review::before { background: #df712e; color: white; content: "!"; }
+.hydro-badge.is-neutral { border-color: #d8d2c9; background: transparent; color: #5f5a53; }
+.hydro-badge.is-neutral::before { display: none; }
+
+@media (min-width: 1100px) {
+  .proan-content-scroll { overflow-y: hidden; }
+  .proan-main-panel { height: 100%; }
+  .hydro-page { position: relative; height: 100%; min-height: 0; grid-template-rows: 138px 70px minmax(0, 1fr); padding: 8px 4px 12px; }
+  .hydro-header { min-height: 0; padding: 14px 0; }
+  .hydro-filters { position: absolute; top: 28px; right: 4px; width: max-content; max-width: calc(100% - 360px); gap: 8px; padding: 6px 8px; }
+  .hydro-filters label { flex: 0 0 136px; min-width: 0; }
+  .hydro-filters label:nth-child(1), .hydro-filters label:nth-child(2) { flex-basis: 118px; }
+  .hydro-filters input, .hydro-filters select { min-height: 30px; font-size: 11px; }
+  .hydro-filter-actions { margin-left: 0; gap: 4px; }
+  .hydro-button { padding: 7px 10px; }
+  .hydro-link-button { font-size: 10px; }
+  .hydro-module-kpis { min-height: 0; }
+  .hydro-module-kpis .hydro-kpi { min-height: 64px; padding: 9px 14px; }
+  .hydro-module-kpis .hydro-kpi strong { font-size: 21px; }
+  .hydro-table-card { min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+  .hydro-table-title { padding: 11px 18px 9px; }
+  .hydro-table-wrap { min-height: 0; overflow: auto; }
+  .hydro-table-wrap th, .hydro-table-wrap td { padding: 9px 16px; }
+  .hydro-pagination { padding: 8px 14px; }
+}
+
+/* Hidrocarburos: composición mínima, con foco en datos. */
+@media (min-width: 981px) {
+  .proan-shell { grid-template-columns: 56px minmax(0, 1fr); }
+  .proan-sidebar { width: 56px; padding: 10px 5px; }
+  .proan-sidebar-link { min-height: 38px; padding: 7px 3px; border-radius: 8px; }
+  .proan-sidebar-link-label { font-size: 11px; }
+}
+
+.hydro-header p, .hydro-header span { display: none; }
+.hydro-header p::after, .hydro-header span::after { display: none; }
+.hydro-filters { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.hydro-module-kpis { border: 0; border-radius: 0; background: transparent; }
+.hydro-module-kpis .hydro-kpi { border: 0; background: transparent; }
+.hydro-module-kpis .hydro-kpi::before { right: 14px; left: 14px; }
+.hydro-table-wrap th, .hydro-table-wrap td, .hydro-table-wrap td:nth-child(4) { text-align: center; }
+
+@media (min-width: 1100px) {
+  .hydro-page { grid-template-rows: 82px 58px minmax(0, 1fr); }
+  .hydro-header { display: flex; align-items: center; padding: 0; }
+  .hydro-filters { top: 16px; padding: 0; }
+  .hydro-module-kpis .hydro-kpi { min-height: 54px; padding: 6px 14px; }
+  .hydro-module-kpis .hydro-kpi strong { font-size: 19px; }
+  .hydro-module-kpis .hydro-kpi span { font-size: 9px; }
+}
+
+/* Hidrocarburos: controles de línea y métricas legibles. */
+@media (min-width: 981px) {
+  .proan-sidebar-link, .proan-sidebar-link-label { justify-content: center; text-align: center; }
+  .proan-sidebar-link-label { width: 100%; }
+  .proan-sidebar-link-icon:empty { display: none; }
+}
+
+.hydro-filters input, .hydro-filters select { border: 0; border-bottom: 1px solid #cfc2b2; border-radius: 0; background: transparent; padding-right: 2px; padding-left: 0; }
+.hydro-filters input:focus, .hydro-filters select:focus { border-color: #df712e; box-shadow: none; }
+.hydro-module-kpis .hydro-kpi { text-align: center; }
+
+@media (min-width: 1100px) {
+  .hydro-page { grid-template-rows: 82px 76px minmax(0, 1fr); }
+  .hydro-module-kpis .hydro-kpi { min-height: 70px; padding: 10px 14px; }
+  .hydro-module-kpis .hydro-kpi strong { font-size: clamp(20px, 1.7vw, 25px); }
+  .hydro-module-kpis .hydro-kpi span { font-size: 10px; }
+}
+
+@media (min-width: 981px) {
+  .proan-content-scroll { padding-right: 0; scrollbar-gutter: auto; }
+  .proan-main-panel { padding: 0 12px 0 16px; }
+}
+
+/* Hidrocarburos: cabecera de tabla compacta y navegación contextual. */
+.hydro-link-button { display: none; }
+.hydro-filter-actions .hydro-button { width: 32px; min-width: 32px; padding: 0; font-size: 0; }
+.hydro-filter-actions .hydro-button::after { content: "↻"; font-size: 17px; line-height: 30px; }
+.hydro-table-card { position: relative; }
+.hydro-table-title span { display: none; }
+.hydro-page[data-module="m2"] > .hydro-table-card:not(.hydro-module-table) .hydro-table-title p { display: none; }
+
+@media (min-width: 1100px) {
+  .hydro-page { grid-template-rows: 76px 62px minmax(0, 1fr); }
+  .hydro-module-kpis .hydro-kpi { min-height: 58px; padding: 7px 14px; }
+  .hydro-pagination { position: absolute; top: 10px; right: 14px; z-index: 1; border: 0; padding: 0; }
+  .hydro-pagination button { min-height: 28px; }
+}
+
+/* Hidrocarburos: acciones ligeras y clasificación descriptiva. */
+.hydro-filter-actions .hydro-button, .hydro-filter-actions .hydro-button:hover:not(:disabled) { background: transparent; color: #dc6b2b; }
+.hydro-filter-actions .hydro-button:hover:not(:disabled) { color: #a94a1f; }
+.hydro-pagination button, .hydro-pagination button:not(:disabled):hover { min-width: 24px; border: 0; background: transparent; color: #a94a1f; font-size: 0; padding: 0 4px; }
+.hydro-pagination button::after { font-size: 19px; line-height: 1; }
+.hydro-pagination button:first-child::after { content: "←"; }
+.hydro-pagination button:last-child::after { content: "→"; }
+.hydro-pagination button:disabled { color: #c9c2b8; background: transparent; }
+.hydro-badge.is-neutral { border: 0; padding: 0; font-size: 11px; font-weight: 600; }
+
+/* Hidrocarburos: móvil y tablet. */
+@media (max-width: 900px) {
+  .proan-shell-content { grid-column: 1; grid-row: 2; }
+  .proan-content-scroll { padding-right: 0; scrollbar-gutter: auto; overflow-y: auto; }
+  .proan-main-panel { height: auto; min-height: 100%; padding: 0 14px 20px; }
+  .proan-sidebar { width: 148px; padding: 10px 8px; }
+  .proan-sidebar-link { justify-content: center; min-height: 40px; }
+  .proan-sidebar-link-label { display: block; width: 100%; text-align: center; font-size: 12px; }
+  .proan-sidebar-link-icon:empty { display: none; }
+
+  .hydro-page { display: grid; height: auto; min-height: 0; gap: 18px; padding: 20px 0 30px; }
+  .hydro-header { min-height: 0; padding: 0; border-bottom: 0; }
+  .hydro-header h1::after { font-size: clamp(30px, 10vw, 40px); }
+  .hydro-filters { position: static; display: grid; width: 100%; max-width: none; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; padding: 0; }
+  .hydro-filters label, .hydro-filters label:nth-child(1), .hydro-filters label:nth-child(2) { width: auto; min-width: 0; }
+  .hydro-filters label:nth-child(3) { grid-column: 1 / -1; }
+  .hydro-filters input, .hydro-filters select { min-height: 36px; font-size: 13px; }
+  .hydro-filter-actions { grid-column: 1 / -1; justify-content: flex-end; margin: 0; }
+
+  .hydro-module-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 8px; }
+  .hydro-module-kpis .hydro-kpi { min-height: 70px; padding: 8px 10px; }
+  .hydro-module-kpis .hydro-kpi strong { font-size: clamp(20px, 6vw, 25px); }
+  .hydro-module-kpis .hydro-kpi span { font-size: 9px; }
+  .hydro-module-kpis .hydro-kpi:last-child:nth-child(odd) { grid-column: 1 / -1; }
+
+  .hydro-table-card { display: block; min-height: 0; overflow: hidden; }
+  .hydro-table-title { padding: 14px 14px 10px; }
+  .hydro-table-wrap { overflow-x: auto; overflow-y: visible; }
+  .hydro-table-wrap table { min-width: 760px; }
+  .hydro-table-wrap th, .hydro-table-wrap td { padding: 10px 12px; }
+  .hydro-pagination { position: static; justify-content: flex-end; margin: 0; padding: 10px 14px; }
+}
+
+/* M3: bandeja de aprobación compacta, centrada en la decisión. */
+.approval-page { display: grid; width: 100%; max-width: none; gap: 16px; padding: 8px 4px 16px; }
+.approval-header { display: flex; align-items: center; justify-content: space-between; min-height: 58px; }
+.approval-header p, .approval-table-heading p { margin: 0 0 5px; color: #c75c27; font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.approval-header h1, .approval-table-heading h2 { margin: 0; color: #292d2c; font-family: var(--font-proan-primary); font-weight: 700; letter-spacing: -.035em; }
+.approval-header h1 { font-size: clamp(30px, 3vw, 42px); }.approval-table-heading h2 { font-size: 18px; }
+.approval-refresh, .approval-detail-header button { border: 0; background: transparent; color: #c75c27; cursor: pointer; font-size: 23px; line-height: 1; }.approval-refresh:disabled { opacity: .5; }
+.approval-role-tabs { display: flex; align-items: center; gap: 22px; border-bottom: 1px solid #dedbd4; }
+.approval-role-tabs button { display: inline-flex; align-items: center; gap: 8px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #777068; cursor: pointer; font: inherit; font-size: 13px; font-weight: 750; padding: 0 1px 10px; }.approval-role-tabs button.is-active { border-bottom-color: #dc6b2b; color: #2d302f; }.approval-role-tabs b { display: inline-grid; min-width: 19px; height: 19px; place-items: center; border-radius: 50%; background: #f0e4d8; color: #9a572f; font-size: 10px; }
+.approval-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }.approval-kpis > div { position: relative; min-height: 62px; padding: 7px 18px; text-align: center; }.approval-kpis > div::before { position: absolute; top: 0; right: 18px; left: 18px; height: 2px; background: #df712e; content: ""; opacity: .75; }.approval-kpis span { display: block; color: #8b5234; font-size: 10px; font-weight: 700; }.approval-kpis strong { display: block; margin-top: 4px; color: #292d2c; font-family: var(--font-proan-primary); font-size: clamp(20px, 1.7vw, 25px); letter-spacing: -.035em; white-space: nowrap; }
+.approval-error { margin: 0; color: #a44925; font-size: 13px; }
+.approval-content { display: grid; min-height: 0; grid-template-columns: minmax(0, 1fr); border-top: 1px solid #dedbd4; }.approval-content:has(.approval-detail.is-open) { grid-template-columns: minmax(0, 1fr) 345px; }.approval-table-area { min-width: 0; min-height: 0; }.approval-table-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; padding: 14px 18px 11px; }.approval-table-heading > span { color: #777068; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.approval-table-wrap { min-height: 0; overflow: auto; scrollbar-color: #c97943 #f3ede5; scrollbar-width: thin; }.approval-table-wrap::-webkit-scrollbar { width: 10px; height: 10px; }.approval-table-wrap::-webkit-scrollbar-track { background: #f3ede5; }.approval-table-wrap::-webkit-scrollbar-thumb { border: 2px solid #f3ede5; border-radius: 999px; background: #c97943; }.approval-table-wrap table { width: 100%; border-collapse: collapse; font-size: 13px; }.approval-table-wrap th, .approval-table-wrap td { border-top: 1px solid #eeeae4; padding: 10px 14px; text-align: center; vertical-align: middle; }.approval-table-wrap th { background: rgba(241, 237, 230, .75); color: #777068; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }.approval-table-wrap td { color: #343735; }.approval-table-wrap td:nth-child(2) { text-align: left; }.approval-table-wrap td:nth-child(4) { font-weight: 750; }.approval-table-wrap tbody tr { cursor: pointer; }.approval-table-wrap tbody tr:nth-child(even) { background: rgba(248, 245, 239, .48); }.approval-table-wrap tbody tr:hover, .approval-table-wrap tbody tr.is-selected { background: rgba(247, 229, 213, .62); outline: none; }.approval-empty { margin: 0; padding: 24px; color: #777068; font-size: 13px; text-align: center; }
+.approval-detail { display: none; min-height: 0; border-left: 1px solid #dedbd4; background: rgba(255, 254, 251, .56); }.approval-detail.is-open { display: block; }.approval-detail-placeholder { display: grid; height: 100%; min-height: 280px; place-items: center; color: #918a80; font-size: 13px; text-align: center; }.approval-detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 17px 18px; border-bottom: 1px solid #e6e0d8; }.approval-detail-header p { margin: 0; color: #8b5234; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }.approval-detail-header h2 { margin: 4px 0 0; color: #292d2c; font-family: var(--font-proan-primary); font-size: 20px; }
+.approval-invoice-data, .approval-audit dl { display: grid; grid-template-columns: minmax(94px, .8fr) minmax(0, 1.35fr); gap: 7px 10px; margin: 0; padding: 16px 18px; border-bottom: 1px solid #e6e0d8; font-size: 12px; }.approval-invoice-data dt, .approval-audit dt { color: #777068; }.approval-invoice-data dd, .approval-audit dd { margin: 0; color: #343735; overflow-wrap: anywhere; text-align: right; }.approval-form, .approval-audit > .approval-field { display: grid; gap: 13px; padding: 16px 18px; }.approval-audit > p { margin: 0; padding: 16px 18px 0; color: #8b5234; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }.approval-audit dl { padding-top: 10px; }
+.approval-field { display: grid; gap: 5px; color: #6b6258; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }.approval-field input, .approval-field textarea { width: 100%; border: 0; border-bottom: 1px solid #cfc2b2; background: transparent; color: #2d302f; font: inherit; font-size: 13px; font-weight: 600; outline: 0; padding: 5px 1px; }.approval-field textarea { min-height: 52px; resize: vertical; }.approval-field input:focus, .approval-field textarea:focus { border-color: #df712e; }
+.approval-actions, .approval-reject { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 16px 18px; }.approval-text-button { border: 0; background: transparent; color: #9a572f; cursor: pointer; font: inherit; font-size: 12px; font-weight: 750; }.approval-primary-button, .approval-reject-button { border: 0; border-radius: 6px; background: #dc6b2b; color: #fff; cursor: pointer; font: inherit; font-size: 12px; font-weight: 800; padding: 9px 12px; }.approval-reject-button { background: #8f3f25; }.approval-primary-button:disabled, .approval-reject-button:disabled, .approval-text-button:disabled { cursor: not-allowed; opacity: .55; }.approval-reject { display: grid; justify-content: stretch; border-top: 1px solid #e6e0d8; }.approval-reject p { margin: 0; color: #7a5547; font-size: 12px; }.approval-reject div { display: flex; justify-content: flex-end; gap: 10px; }
+
+@media (min-width: 1100px) { .proan-main-panel:has(.approval-page) { min-height: 0; }.approval-page { height: 100%; min-height: 0; grid-template-rows: 58px 34px 66px minmax(0, 1fr); }.approval-content { overflow: hidden; }.approval-table-area { display: grid; grid-template-rows: auto minmax(0, 1fr); }.approval-detail { overflow-y: auto; } }
+@media (max-width: 900px) { .approval-page { gap: 18px; padding: 20px 0 30px; }.approval-content, .approval-content:has(.approval-detail.is-open) { grid-template-columns: 1fr; }.approval-table-wrap { overflow-x: auto; }.approval-table-wrap table { min-width: 730px; }.approval-detail { display: none; border-top: 1px solid #dedbd4; border-left: 0; }.approval-detail.is-open { position: fixed; z-index: 30; inset: 84px 0 0; display: block; overflow-y: auto; background: #fffdf9; }.approval-detail-placeholder { display: none; }.approval-kpis { gap: 14px 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }.approval-kpis > div { min-height: 64px; padding: 7px 8px; }.approval-kpis > div:nth-child(3) { grid-column: 1 / -1; }.approval-kpis strong { font-size: 21px; }.approval-table-heading { padding-right: 0; padding-left: 0; }.approval-role-tabs { gap: 18px; }.approval-invoice-data, .approval-audit dl { grid-template-columns: 1fr; gap: 3px; }.approval-invoice-data dd, .approval-audit dd { margin-bottom: 7px; text-align: left; } }

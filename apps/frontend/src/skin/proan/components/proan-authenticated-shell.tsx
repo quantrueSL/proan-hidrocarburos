@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { LogoutButton } from "@/components/logout-button";
 import { ProfilePanel } from "@/components/profile-panel";
 import type { FrontendSession } from "@/types/auth";
@@ -13,8 +13,7 @@ import { proanBranding } from "@/skin/proan/branding";
 import proanIcon from "@/skin/proan/assets/logos/iconoproan.png";
 
 type ShellFeatures = {
-  report: { enabled: boolean; assistant: { enabled: boolean } };
-  alerts: { enabled: boolean };
+  hydrocarburos: { enabled: boolean };
 };
 
 type ProanAuthenticatedShellProps = {
@@ -26,28 +25,10 @@ type ProanAuthenticatedShellProps = {
 
 type NavItem = {
   href: string;
-  key: "report" | "alerts";
+  key: "hydrocarburos-m1" | "hydrocarburos-m2" | "aprobacion";
   label: string;
+  module?: "m1" | "m2";
 };
-
-function ReportIcon() {
-  return (
-    <svg fill="none" viewBox="0 0 24 24">
-      <path d="M7 4h7l5 5v11H7z" />
-      <path d="M14 4v5h5" />
-      <path d="M10 13h6M10 17h6M10 9h2" />
-    </svg>
-  );
-}
-
-function AlertsIcon() {
-  return (
-    <svg fill="none" viewBox="0 0 24 24">
-      <path d="M12 4a5 5 0 0 0-5 5v2.4c0 .7-.2 1.3-.6 1.9L5 15h14l-1.4-1.7c-.4-.5-.6-1.2-.6-1.9V9a5 5 0 0 0-5-5Z" />
-      <path d="M10 18a2 2 0 0 0 4 0" />
-    </svg>
-  );
-}
 
 function BookIcon() {
   return (
@@ -78,11 +59,10 @@ function LogoutIcon() {
 }
 
 function getHomeHref(features: ShellFeatures): string {
-  if (features.report.enabled) {
-    return "/report";
+  if (features.hydrocarburos.enabled) {
+    return "/hidrocarburos?module=m1";
   }
-
-  return "/alerts";
+  return "/";
 }
 
 export function ProanAuthenticatedShell({
@@ -95,6 +75,7 @@ export function ProanAuthenticatedShell({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDictionaryOpen, setIsDictionaryOpen] = useState(false);
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     setIsSidebarOpen(false);
@@ -102,17 +83,17 @@ export function ProanAuthenticatedShell({
   }, [pathname]);
 
   const homeHref = getHomeHref(features);
-  const navItems = ([
-    features.report.enabled
-      ? { href: "/report", key: "report", label: proanBranding.nav.report }
-      : null,
-    features.alerts.enabled
-      ? { href: "/alerts", key: "alerts", label: proanBranding.nav.alerts }
-      : null
-  ] as Array<NavItem | null>).filter((item): item is NavItem => item !== null);
+  const navItems: NavItem[] = features.hydrocarburos.enabled
+    ? [
+        { href: "/hidrocarburos?module=m1", key: "hydrocarburos-m1", label: "M1", module: "m1" },
+        { href: "/hidrocarburos?module=m2", key: "hydrocarburos-m2", label: "M2", module: "m2" },
+        { href: "/aprobacion", key: "aprobacion", label: "M3" }
+      ]
+    : [];
 
-  function isActive(href: string) {
-    return pathname === href || pathname?.startsWith(`${href}/`);
+  function isActive(item: NavItem) {
+    if (item.module) return pathname === "/hidrocarburos" && (searchParams.get("module") || "m1") === item.module;
+    return pathname === item.href || pathname?.startsWith(`${item.href}/`);
   }
 
   return (
@@ -209,14 +190,12 @@ export function ProanAuthenticatedShell({
             {navItems.map((item) => (
               <Link
                 aria-label={item.label}
-                className={`proan-sidebar-link${isActive(item.href) ? " is-active" : ""}`}
+                className={`proan-sidebar-link${isActive(item) ? " is-active" : ""}`}
                 href={item.href}
                 key={item.key}
                 onClick={() => setIsSidebarOpen(false)}
               >
                 <span aria-hidden="true" className="proan-sidebar-link-icon">
-                  {item.key === "report" ? <ReportIcon /> : null}
-                  {item.key === "alerts" ? <AlertsIcon /> : null}
                 </span>
                 <span className="proan-sidebar-link-label">{item.label}</span>
               </Link>

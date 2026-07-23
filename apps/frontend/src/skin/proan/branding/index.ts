@@ -3,8 +3,4 @@ export const proanBranding = {
   metadataTitle: "FinancialAI",
   metadataDescription: "Frontend React de FinancialAI para Proan.",
   loginTitle: "FinancialAI",
-  nav: {
-    report: "REPORT",
-    alerts: "ALERTAS"
-  }
 } as const;

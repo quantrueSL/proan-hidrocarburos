@@ -14,10 +14,8 @@
     "bcryptjs": "^2.4.3",
     "mammoth": "^1.9.1",
     "next": "^14.2.0",
-    "plotly.js-basic-dist-min": "^3.0.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-plotly.js": "^2.6.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

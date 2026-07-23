@@ -1,15 +1,15 @@
 import { getFinancialbiServiceUrl } from "@/lib/env";
 import type { FrontendSession } from "@/types/auth";
-import type {
-  FinancialbiAlertsMtdResponse,
-  FinancialbiAlertsResponse,
-  FinancialbiCatalogResponse,
-  FinancialbiHistoriasMtdResponse,
-  FinancialbiHistoriasResponse,
-  FinancialbiReportResponse,
-  FinancialbiRequest
-} from "@/types/financialbi";
 import type { UserRead } from "@/types/gateway";
+import type {
+  HydrocarburosCatalog,
+  HydrocarburosFilters,
+  HydrocarburosInvoiceDetail,
+  HydrocarburosSearchRequest,
+  HydrocarburosSearchResponse,
+  HydrocarburosSummary
+} from "@/types/hidrocarburos";
+import type { AprobacionCatalog, AprobacionQueue } from "@/types/aprobacion";
 
 type FinancialbiFetchOptions = {
   method?: "GET" | "POST";
@@ -114,50 +114,40 @@ export async function updateCurrentUserInstructions(
 // FinancialBI (reportes + alertas)
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function getFinancialbiCatalog(
-  _session: FrontendSession
-): Promise<FinancialbiCatalogResponse> {
-  return financialbiFetchJson<FinancialbiCatalogResponse>("/v1/financialbi/catalog");
+export async function getHydrocarburosCatalog(_session: FrontendSession): Promise<HydrocarburosCatalog> {
+  return financialbiFetchJson<HydrocarburosCatalog>("/v1/financialbi/hidrocarburos/catalog");
 }
 
-export async function getFinancialbiReport(
-  _session: FrontendSession,
-  input: FinancialbiRequest
-): Promise<FinancialbiReportResponse> {
-  return financialbiFetchJson<FinancialbiReportResponse>("/v1/financialbi/report", {
-    method: "POST",
-    body: input
-  });
+export async function getHydrocarburosSummary(
+  _session: FrontendSession, input: HydrocarburosFilters
+): Promise<HydrocarburosSummary> {
+  return financialbiFetchJson<HydrocarburosSummary>("/v1/financialbi/hidrocarburos/summary", { method: "POST", body: input });
 }
 
-export async function getFinancialbiAlerts(
-  _session: FrontendSession,
-  input: FinancialbiRequest
-): Promise<FinancialbiAlertsResponse> {
-  return financialbiFetchJson<FinancialbiAlertsResponse>("/v1/financialbi/alerts", {
-    method: "POST",
-    body: input
-  });
+export async function searchHydrocarburosInvoices(
+  _session: FrontendSession, input: HydrocarburosSearchRequest
+): Promise<HydrocarburosSearchResponse> {
+  return financialbiFetchJson<HydrocarburosSearchResponse>("/v1/financialbi/hidrocarburos/invoices/search", { method: "POST", body: input });
 }
 
-export async function getFinancialbiHistorias(
-  _session: FrontendSession,
-  input: FinancialbiRequest
-): Promise<FinancialbiHistoriasResponse> {
-  return financialbiFetchJson<FinancialbiHistoriasResponse>("/v1/financialbi/historias", {
-    method: "POST",
-    body: input
-  });
+export async function getHydrocarburosInvoice(
+  _session: FrontendSession, uuid: string
+): Promise<HydrocarburosInvoiceDetail> {
+  return financialbiFetchJson<HydrocarburosInvoiceDetail>(`/v1/financialbi/hidrocarburos/invoices/${encodeURIComponent(uuid)}`);
 }
 
-export async function getFinancialbiAlertsMtd(
-  _session: FrontendSession
-): Promise<FinancialbiAlertsMtdResponse> {
-  return financialbiFetchJson<FinancialbiAlertsMtdResponse>("/v1/financialbi/alerts_mtd");
+export async function getAprobacionCompras(_session: FrontendSession): Promise<AprobacionQueue> {
+  return financialbiFetchJson<AprobacionQueue>("/v1/financialbi/hidrocarburos/aprobacion/compras");
 }
 
-export async function getFinancialbiHistoriasMtd(
-  _session: FrontendSession
-): Promise<FinancialbiHistoriasMtdResponse> {
-  return financialbiFetchJson<FinancialbiHistoriasMtdResponse>("/v1/financialbi/historias_mtd");
+export async function getAprobacionGerencia(_session: FrontendSession): Promise<AprobacionQueue> {
+  return financialbiFetchJson<AprobacionQueue>("/v1/financialbi/hidrocarburos/aprobacion/gerencia");
+}
+
+export async function getAprobacionCatalogCeco(_session: FrontendSession): Promise<AprobacionCatalog> {
+  return financialbiFetchJson<AprobacionCatalog>("/v1/financialbi/hidrocarburos/aprobacion/catalogo/ceco");
+}
+
+export async function getAprobacionCatalogSitios(_session: FrontendSession): Promise<AprobacionCatalog> {
+  return financialbiFetchJson<AprobacionCatalog>("/v1/financialbi/hidrocarburos/aprobacion/catalogo/sitios");
 }

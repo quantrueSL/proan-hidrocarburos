@@ -1,15 +1,14 @@
 # =============================================================================
-# proan-Hidrocarburos — stack LOCAL de DESARROLLO (report + alertas)
+# proan-Hidrocarburos — stack LOCAL de DESARROLLO (gestión de facturas de gas)
 #
 # 3 contenedores (frente a los ~15 del monorepo de Maka):
 #   carb-nginx-dev       reverse proxy (http :8080)
-#   carb-frontend-dev    Next.js (report + alertas, auth por .htpasswd)
-#   carb-financialbi-dev backend FastAPI (BigQuery + Gemini para historias)
+#   carb-frontend-dev    Next.js (Hidrocarburos, auth por .htpasswd)
+#   carb-financialbi-dev backend FastAPI (BigQuery)
 #
 # Sin gateway, auth-service, postgres, redis, celery, workers, weaviate.
 #
 # Arranque (desde la raíz del repo):
-#   cp .env.example .env            # y rellena LLM_API_KEY (Gemini)
 #   # coloca la service-account BigQuery en config/bq_credentials.json
 #   docker compose -f deploy/docker-compose.dev.yml up --build
 #   # → http://localhost:8080   (admin / carburos2026)
@@ -30,9 +29,6 @@ services:
       - ../config/financialbi.env
     environment:
       - ENV=development
-      - LLM_API_URL=${LLM_API_URL:-https://generativelanguage.googleapis.com/v1beta/openai}
-      - LLM_MODEL_ID=${LLM_MODEL_ID:-gemini-3.1-flash-lite}
-      - LLM_API_KEY=${LLM_API_KEY:-}
     volumes:
       # Hot-reload: monta solo el paquete (preserva la .venv de la imagen).
       - ../apps/financialbi/financialbi:/app/apps/financialbi/financialbi
