@@ -25,8 +25,12 @@ from financialbi.aprobacion_engine import (
     cola_compras,
     cola_gerencia,
     ensure_schema as ensure_aprobacion_schema,
+    historial as aprobacion_historial,
+    reabrir as reabrir_aprobacion,
     rechazar as rechazar_aprobacion,
 )
+from financialbi.dashboard_engine import resumen_completo as dashboard_resumen_completo
+from financialbi.estatus_sat import ensure_schema as ensure_estatus_sat_schema
 
 log = logging.getLogger(__name__)
 
@@ -37,6 +41,7 @@ app = FastAPI(title="FinancialBI", version="0.1.0")
 def _startup() -> None:
     # Idempotente -- CREATE TABLE IF NOT EXISTS, seguro llamarlo en cada arranque.
     ensure_aprobacion_schema()
+    ensure_estatus_sat_schema()
 
 
 class HydrocarburosFilters(BaseModel):
@@ -67,6 +72,11 @@ class AprobarBody(BaseModel):
 
 
 class RechazarBody(BaseModel):
+    usuario: str = Field(min_length=1)
+    motivo: str = Field(min_length=1)
+
+
+class ReabrirBody(BaseModel):
     usuario: str = Field(min_length=1)
     motivo: str = Field(min_length=1)
 
@@ -177,6 +187,19 @@ def financial_aprobacion_cola_gerencia() -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@app.get("/v1/financialbi/hidrocarburos/aprobacion/historial")
+def financial_aprobacion_historial() -> dict[str, Any]:
+    """Facturas ya avanzadas más allá de la bandeja inicial de Compras
+    (pendientes de Gerencia, aprobadas, rechazadas) -- necesario para poder
+    reeditar antes de decidir o reabrir después, ver reversibilidad en
+    Datos/PHASE2/Esquema.md §4."""
+    try:
+        return {"rows": _to_jsonable(aprobacion_historial())}
+    except Exception as exc:
+        log.exception("aprobacion historial error")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @app.get("/v1/financialbi/hidrocarburos/aprobacion/catalogo/ceco")
 def financial_aprobacion_catalogo_ceco() -> dict[str, Any]:
     try:
@@ -244,4 +267,31 @@ def financial_aprobacion_rechazar_gerencia(uuid: str, body: RechazarBody) -> dic
         raise
     except Exception as exc:
         log.exception("aprobacion rechazar gerencia error")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/v1/financialbi/hidrocarburos/aprobacion/{uuid}/reabrir")
+def financial_aprobacion_reabrir(uuid: str, body: ReabrirBody) -> dict[str, Any]:
+    """Deshace una aprobación o rechazo -- la factura vuelve a
+    pendiente_validacion_compras. Sin control de rol (D27), igual que el
+    resto de acciones de M3."""
+    try:
+        result = reabrir_aprobacion(uuid=uuid, **body.model_dump())
+        _raise_if_not_ok(result)
+        return {"ok": True, "estado": result["estado_actual"]}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log.exception("aprobacion reabrir error")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# --- Dashboard (Propuesta.md §3) ---------------------------------------------
+
+@app.get("/v1/financialbi/hidrocarburos/dashboard")
+def financial_dashboard() -> dict[str, Any]:
+    try:
+        return _to_jsonable(dashboard_resumen_completo())
+    except Exception as exc:
+        log.exception("dashboard error")
         raise HTTPException(status_code=500, detail=str(exc))

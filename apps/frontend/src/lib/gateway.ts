@@ -10,6 +10,7 @@ import type {
   HydrocarburosSummary
 } from "@/types/hidrocarburos";
 import type { AprobacionCatalog, AprobacionQueue } from "@/types/aprobacion";
+import type { DashboardData } from "@/types/dashboard";
 
 type FinancialbiFetchOptions = {
   method?: "GET" | "POST";
@@ -144,10 +145,18 @@ export async function getAprobacionGerencia(_session: FrontendSession): Promise<
   return financialbiFetchJson<AprobacionQueue>("/v1/financialbi/hidrocarburos/aprobacion/gerencia");
 }
 
+export async function getAprobacionHistorial(_session: FrontendSession): Promise<AprobacionQueue> {
+  return financialbiFetchJson<AprobacionQueue>("/v1/financialbi/hidrocarburos/aprobacion/historial");
+}
+
 export async function getAprobacionCatalogCeco(_session: FrontendSession): Promise<AprobacionCatalog> {
   return financialbiFetchJson<AprobacionCatalog>("/v1/financialbi/hidrocarburos/aprobacion/catalogo/ceco");
 }
 
 export async function getAprobacionCatalogSitios(_session: FrontendSession): Promise<AprobacionCatalog> {
   return financialbiFetchJson<AprobacionCatalog>("/v1/financialbi/hidrocarburos/aprobacion/catalogo/sitios");
+}
+
+export async function getDashboard(_session: FrontendSession): Promise<DashboardData> {
+  return financialbiFetchJson<DashboardData>("/v1/financialbi/hidrocarburos/dashboard");
 }

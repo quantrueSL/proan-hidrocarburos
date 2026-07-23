@@ -41,9 +41,10 @@ facturas recibidas por Proteína Animal (`PAN921013AK7`) con clave SAT de gas
 | --- | --- | --- |
 | **M1 — Clasificación** | Filtra las facturas de gas del CFDI, marca las mixtas (factura con gas + otros conceptos) y calcula el importe de gas por factura (nunca el total de la factura, que puede incluir otras cosas). | ✅ Construido |
 | **M2 — Validación SAP** (automática) | Comprueba si la factura quedó registrada en la contabilidad de SAP (~85% lo está) y, cuando es posible, deriva la planta de consumo a partir del pedido de compra (~54-58% de los casos). No bloquea nada — es información de contexto. | ✅ Construido |
-| **M3 — Aprobación** | Flujo de dos pasos humanos: **Compras** revisa la factura, indica el centro de costos (CECO, siempre manual) y confirma/corrige la planta de consumo si M2 no la dedujo; **Gerencia** ve la factura ya revisada por Compras y la aprueba o rechaza. | 🔧 Backend construido, falta frontend |
+| **M3 — Aprobación** | Flujo de dos pasos humanos: **Compras** revisa la factura, indica el centro de costos (CECO, siempre manual) y confirma/corrige la planta de consumo si M2 no la dedujo; **Gerencia** ve la factura ya revisada por Compras y la aprueba o rechaza. Reversible: se puede corregir o "reabrir" una decisión. | ✅ Construido |
 | **M4 — Pago** | Marcar la factura como pagada una vez SAP procese el pago. | ⏸️ Aparcado — no existe hoy una fuente de datos fiable del estatus de pago por proveedor |
-| **Dashboard** | Resúmenes ejecutivos: total de facturas, gasto por CECO/planta, estatus de aprobación. | 📋 Sin diseñar todavía |
+| **Estatus SAT** | Comprueba si el CFDI sigue vigente o fue cancelado ante el SAT (webservice público). | ✅ Construido — corre a mano (`python -m financialbi.estatus_sat`) hasta que exista el DAG de Airflow |
+| **Dashboard** | Resumen de estatus (total/pendientes/validadas/aprobadas/rechazadas + estatus SAT) y gasto por CECO/sitio/periodo. | ✅ Construido |
 
 ### Lo que un usuario ve y puede hacer
 
@@ -51,13 +52,17 @@ facturas recibidas por Proteína Animal (`PAN921013AK7`) con clave SAT de gas
   detectadas, filtrable por proveedor, fecha, planta y si SAP la validó o no.
   Al abrir una factura se ve su desglose (importe de gas, si es mixta, estado
   de registro en SAP, planta si se conoce).
-- **Cola de Compras (M3, en construcción):** facturas pendientes de revisar.
-  Compras captura el CECO (siempre a mano — no hay forma de derivarlo
-  automáticamente de los datos de SAP disponibles) y confirma la planta si M2
-  no la dedujo, con sugerencias desde catálogos conocidos pero sin bloquear si
-  el dato correcto no aparece en la lista.
-- **Cola de Gerencia (M3, en construcción):** facturas ya revisadas por
-  Compras, con un botón de aprobar/rechazar tipo "one-tap".
+- **Cola de Compras (M3):** facturas pendientes de revisar. Compras captura
+  el CECO (siempre a mano — no hay forma de derivarlo automáticamente de los
+  datos de SAP disponibles) y confirma la planta si M2 no la dedujo, con
+  sugerencias desde catálogos conocidos pero sin bloquear si el dato correcto
+  no aparece en la lista.
+- **Cola de Gerencia (M3):** facturas ya revisadas por Compras, con un botón
+  de aprobar/rechazar tipo "one-tap".
+- **Historial (M3):** facturas ya enviadas a Gerencia o ya decididas —
+  permite corregir CECO/sitio antes de que Gerencia decida, o "reabrir" una
+  factura aprobada/rechazada por error (vuelve a pendiente de Compras).
+- **Dashboard:** resumen ejecutivo de estatus y gasto — ver arriba.
 
 ### Limitaciones conocidas (no son bugs, son la realidad de los datos)
 
@@ -71,7 +76,11 @@ facturas recibidas por Proteína Animal (`PAN921013AK7`) con clave SAT de gas
 - El **estatus de pago (M4) no es recuperable** de los datos actuales — se
   necesitaría una fuente de SAP que hoy no está disponible en el almacén.
 - El **estatus de cancelación ante el SAT** se comprueba contra el webservice
-  público del SAT (no viene en los datos de CFDI) — pendiente de construir.
+  público del SAT (no viene en los datos de CFDI) — construido, pero corre a
+  mano hasta que exista el DAG de Airflow.
+- **Sin auth real:** cualquiera con acceso puede actuar como Compras o
+  Gerencia — no hay usuarios ni roles, es texto libre. Vale para probarlo
+  internamente, no para un despliegue con varios equipos todavía.
 
 Diseño completo, decisiones y SQL de origen en
 [`Datos/PHASE1/`](./Datos/PHASE1/) (investigación de datos) y

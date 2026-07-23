@@ -11,6 +11,11 @@ export type AprobacionInvoice = {
   usuario_gerencia: string | null;
   fecha_aprobacion_gerencia: string | null;
   comentario_gerencia: string | null;
+  rechazada_por_rol: string | null;
+  motivo_rechazo: string | null;
+  reabierta_por: string | null;
+  fecha_reapertura: string | null;
+  motivo_reapertura: string | null;
   serie: string | null;
   folio: string | null;
   fecha: string | null;

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth/session";
-import { getAprobacionCatalogCeco, getAprobacionCatalogSitios, getAprobacionCompras, getAprobacionGerencia } from "@/lib/gateway";
+import { getAprobacionCatalogCeco, getAprobacionCatalogSitios, getAprobacionCompras, getAprobacionGerencia, getAprobacionHistorial } from "@/lib/gateway";
 import { getFinancialbiServiceUrl } from "@/lib/env";
 
 type Context = { params: { path: string[] } };
@@ -19,6 +19,7 @@ export async function GET(_request: Request, { params }: Context) {
     const key = params.path.join("/");
     if (key === "compras") return NextResponse.json(await getAprobacionCompras(session));
     if (key === "gerencia") return NextResponse.json(await getAprobacionGerencia(session));
+    if (key === "historial") return NextResponse.json(await getAprobacionHistorial(session));
     if (key === "catalogo/ceco") return NextResponse.json(await getAprobacionCatalogCeco(session));
     if (key === "catalogo/sitios") return NextResponse.json(await getAprobacionCatalogSitios(session));
     return NextResponse.json({ detail: "Ruta de aprobación no encontrada." }, { status: 404 });

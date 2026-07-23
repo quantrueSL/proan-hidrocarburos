@@ -50,8 +50,21 @@ CREATE TABLE IF NOT EXISTS {_APROBACION} (
   fecha_aprobacion_gerencia TIMESTAMP,
   comentario_gerencia STRING,
   rechazada_por_rol STRING,
-  motivo_rechazo STRING
+  motivo_rechazo STRING,
+  -- Reversibilidad: quién reabrió la última vez y por qué (no histórico completo,
+  -- solo la última reapertura -- una tabla de auditoría aparte sería más de lo
+  -- que hace falta ahora mismo).
+  reabierta_por STRING,
+  fecha_reapertura TIMESTAMP,
+  motivo_reapertura STRING
 )
+"""
+
+_ALTER_ADD_REAPERTURA = f"""
+ALTER TABLE {_APROBACION}
+  ADD COLUMN IF NOT EXISTS reabierta_por STRING,
+  ADD COLUMN IF NOT EXISTS fecha_reapertura TIMESTAMP,
+  ADD COLUMN IF NOT EXISTS motivo_reapertura STRING
 """
 
 _ESTADO_ORIGEN = {
@@ -61,8 +74,11 @@ _ESTADO_ORIGEN = {
 
 
 def ensure_schema() -> None:
-    """Crea HCARB_gold_aprobacion si no existe. Idempotente."""
-    _get_bq_client().query(_SCHEMA_DDL).result()
+    """Crea HCARB_gold_aprobacion si no existe, y añade las columnas de
+    reapertura si faltan (tabla creada antes de que existieran). Idempotente."""
+    client = _get_bq_client()
+    client.query(_SCHEMA_DDL).result()
+    client.query(_ALTER_ADD_REAPERTURA).result()
 
 
 def _client() -> bigquery.Client:
@@ -91,16 +107,22 @@ def sync_pendientes() -> int:
     return job.num_dml_affected_rows or 0
 
 
-def _cola_query(estado: str) -> str:
-    return f"""
-      SELECT
+_SELECT_COLA = """
         a.uuid, a.estado, a.ceco, a.werks_manual,
         a.usuario_compras, a.fecha_validacion_compras, a.comentario_compras,
         a.usuario_gerencia, a.fecha_aprobacion_gerencia, a.comentario_gerencia,
+        a.rechazada_por_rol, a.motivo_rechazo,
+        a.reabierta_por, a.fecha_reapertura, a.motivo_reapertura,
         f.serie, CAST(f.folio AS STRING) AS folio, DATE(f.fecha) AS fecha,
         f.id_proveedor, COALESCE(v.razon_social, f.emisor_rfc) AS proveedor,
         f.importe_gas, f.es_mixta,
         s.estado_sap, s.werks, s.sitio_consumo
+"""
+
+
+def _cola_query(estado: str) -> str:
+    return f"""
+      SELECT {_SELECT_COLA}
       FROM {_APROBACION} a
       JOIN {_FOLIO} f ON a.uuid = f.uuid
       LEFT JOIN {_SAP} s ON f.uuid = s.uuid
@@ -123,6 +145,24 @@ def cola_gerencia() -> list[dict[str, Any]]:
         _cola_query("pendiente_aprobacion_gerencia"),
         [bigquery.ScalarQueryParameter("estado", "STRING", "pendiente_aprobacion_gerencia")],
     )
+
+
+def historial() -> list[dict[str, Any]]:
+    """Facturas que ya salieron de la bandeja inicial de Compras -- pendientes
+    de que Gerencia decida, aprobadas, o rechazadas. Es la vista que hace
+    falta para reeditar (D-reversibilidad) antes de que Gerencia decida, o
+    para reabrir una vez decidido; sin esto no hay forma de encontrar esas
+    facturas desde la interfaz."""
+    query = f"""
+      SELECT {_SELECT_COLA}
+      FROM {_APROBACION} a
+      JOIN {_FOLIO} f ON a.uuid = f.uuid
+      LEFT JOIN {_SAP} s ON f.uuid = s.uuid
+      LEFT JOIN {_VENDORS} v ON f.id_proveedor = v.id_proveedor
+      WHERE a.estado IN ('pendiente_aprobacion_gerencia', 'aprobada', 'rechazada')
+      ORDER BY COALESCE(a.fecha_reapertura, a.fecha_aprobacion_gerencia, a.fecha_validacion_compras) DESC
+    """
+    return _rows(query)
 
 
 def catalogo_ceco() -> list[dict[str, Any]]:
@@ -160,13 +200,18 @@ def capturar_compras(
     *, uuid: str, ceco: str, usuario: str, werks_manual: str | None = None, comentario: str | None = None
 ) -> dict[str, Any]:
     """Compras captura CECO (siempre) y opcionalmente el sitio manual (solo si
-    M2 no lo dedujo) -- pasa la factura a pendiente_aprobacion_gerencia."""
+    M2 no lo dedujo) -- pasa la factura a pendiente_aprobacion_gerencia.
+
+    Reversibilidad: el WHERE acepta también pendiente_aprobacion_gerencia como
+    origen -- Compras puede corregir un error de captura (CECO/sitio) mientras
+    Gerencia no haya decidido todavía, sin necesitar reabrir nada."""
     query = f"""
       UPDATE {_APROBACION}
       SET ceco = @ceco, werks_manual = @werks_manual, usuario_compras = @usuario,
           fecha_validacion_compras = CURRENT_TIMESTAMP(), comentario_compras = @comentario,
           estado = 'pendiente_aprobacion_gerencia'
-      WHERE uuid = @uuid AND estado = 'pendiente_validacion_compras'
+      WHERE uuid = @uuid
+        AND estado IN ('pendiente_validacion_compras', 'pendiente_aprobacion_gerencia')
     """
     params = [
         bigquery.ScalarQueryParameter("uuid", "STRING", uuid),
@@ -222,3 +267,34 @@ def rechazar(*, uuid: str, rol: Rol, usuario: str, motivo: str) -> dict[str, Any
     job.result()
     ok = bool(job.num_dml_affected_rows)
     return {"ok": ok, "estado_actual": _estado_actual(uuid) if not ok else "rechazada"}
+
+
+def reabrir(*, uuid: str, usuario: str, motivo: str) -> dict[str, Any]:
+    """Deshace cualquier avance sobre una factura (ya validada por Compras,
+    aprobada, o rechazada) y la devuelve a pendiente_validacion_compras --
+    borra los datos anteriores (CECO, sitio, comentarios, quién decidió) y
+    deja constancia de quién reabrió y por qué. Incluye pendiente_aprobacion_gerencia
+    a propósito: sirve también para "me equivoqué de CECO, quiero borrar todo
+    y empezar de cero" sin necesitar que Gerencia apruebe o rechace antes.
+    No hay control de rol (D27): cualquiera puede reabrir cualquier factura,
+    igual que cualquiera puede validar/aprobar."""
+    query = f"""
+      UPDATE {_APROBACION}
+      SET estado = 'pendiente_validacion_compras',
+          ceco = NULL, werks_manual = NULL,
+          usuario_compras = NULL, fecha_validacion_compras = NULL, comentario_compras = NULL,
+          usuario_gerencia = NULL, fecha_aprobacion_gerencia = NULL, comentario_gerencia = NULL,
+          rechazada_por_rol = NULL, motivo_rechazo = NULL,
+          reabierta_por = @usuario, fecha_reapertura = CURRENT_TIMESTAMP(), motivo_reapertura = @motivo
+      WHERE uuid = @uuid
+        AND estado IN ('pendiente_aprobacion_gerencia', 'aprobada', 'rechazada')
+    """
+    params = [
+        bigquery.ScalarQueryParameter("uuid", "STRING", uuid),
+        bigquery.ScalarQueryParameter("usuario", "STRING", usuario),
+        bigquery.ScalarQueryParameter("motivo", "STRING", motivo),
+    ]
+    job = _client().query(query, job_config=bigquery.QueryJobConfig(query_parameters=params))
+    job.result()
+    ok = bool(job.num_dml_affected_rows)
+    return {"ok": ok, "estado_actual": _estado_actual(uuid) if not ok else "pendiente_validacion_compras"}

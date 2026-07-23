@@ -59,28 +59,31 @@ function DetailPanel({ invoice, loading, error, module, onClose }: {
 }) {
   if (!invoice && !loading && !error) return null;
   return (
-    <aside className={`hydro-detail hydro-detail--${module}`} aria-label="Detalle de factura">
-      <div className="hydro-detail-header"><div><p>Detalle de factura</p><h2>{invoice?.serie || ""}{invoice?.folio || ""}</h2></div><button onClick={onClose} type="button" aria-label="Cerrar detalle">×</button></div>
-      {loading ? <p className="hydro-muted">Cargando evidencia…</p> : null}
-      {error ? <p className="hydro-error">{error}</p> : null}
-      {invoice ? <div className="hydro-detail-body">
-        <section><h3>CFDI y clasificación</h3><dl>
-          <dt>Proveedor</dt><dd>{invoice.proveedor}</dd><dt>UUID</dt><dd className="hydro-uuid">{invoice.uuid}</dd>
-          <dt>Fecha</dt><dd>{formatDate(invoice.fecha as string)}</dd><dt>Importe gas</dt><dd>{money.format(Number(invoice.importe_gas || 0))}</dd>
-          <dt>Factura mixta</dt><dd>{invoice.es_mixta ? "Sí" : "No"}</dd><dt>Total CFDI</dt><dd>{money.format(Number(invoice.total || 0))}</dd>
-        </dl></section>
-        <section><h3>Validación SAP</h3><dl>
-          <dt>Estado</dt><dd><span className={`hydro-badge ${invoice.estado_sap === "validada_sap" ? "is-ok" : "is-review"}`}>{statusLabel(invoice.estado_sap as string)}</span></dd>
-          <dt>Documento SAP</dt><dd>{String(invoice.belnr_sap || "—")}</dd><dt>Tipo de match</dt><dd>{String(invoice.tipo_match_sap || "—")}</dd>
-          <dt>Días de diferencia</dt><dd>{invoice.dias_diferencia == null ? "—" : String(invoice.dias_diferencia)}</dd>
-        </dl></section>
-        <section><h3>Sitio y recepción</h3><dl>
-          <dt>Sitio de consumo</dt><dd>{String(invoice.sitio_consumo || "Pendiente de captura manual")}</dd><dt>Centro</dt><dd>{String(invoice.werks || "—")}</dd>
-          <dt>Recepción MSEG</dt><dd>{invoice.tiene_recepcion_mseg ? "Confirmada" : "No disponible"}</dd>
-          {invoice.tiene_recepcion_mseg ? <><dt>Cantidad MSEG</dt><dd>{String(invoice.mseg_cantidad || "—")}</dd><dt>Importe MSEG</dt><dd>{money.format(Number(invoice.mseg_importe || 0))}</dd></> : null}
-        </dl></section>
-      </div> : null}
-    </aside>
+    <>
+      <button aria-label="Cerrar detalle" className="hydro-detail-backdrop" onClick={onClose} type="button" />
+      <aside className={`hydro-detail hydro-detail--${module}`} aria-label="Detalle de factura" role="dialog" aria-modal="true">
+        <div className="hydro-detail-header"><div><p>Detalle de factura</p><h2>{invoice?.serie || ""}{invoice?.folio || ""}</h2></div><button onClick={onClose} type="button" aria-label="Cerrar detalle">×</button></div>
+        {loading ? <p className="hydro-muted">Cargando evidencia…</p> : null}
+        {error ? <p className="hydro-error">{error}</p> : null}
+        {invoice ? <div className="hydro-detail-body">
+          <section><h3>CFDI y clasificación</h3><dl>
+            <dt>Proveedor</dt><dd>{invoice.proveedor}</dd><dt>UUID</dt><dd className="hydro-uuid">{invoice.uuid}</dd>
+            <dt>Fecha</dt><dd>{formatDate(invoice.fecha as string)}</dd><dt>Importe gas</dt><dd>{money.format(Number(invoice.importe_gas || 0))}</dd>
+            <dt>Factura mixta</dt><dd>{invoice.es_mixta ? "Sí" : "No"}</dd><dt>Total CFDI</dt><dd>{money.format(Number(invoice.total || 0))}</dd>
+          </dl></section>
+          <section><h3>Validación SAP</h3><dl>
+            <dt>Estado</dt><dd><span className={`hydro-badge ${invoice.estado_sap === "validada_sap" ? "is-ok" : "is-review"}`}>{statusLabel(invoice.estado_sap as string)}</span></dd>
+            <dt>Documento SAP</dt><dd>{String(invoice.belnr_sap || "—")}</dd><dt>Tipo de match</dt><dd>{String(invoice.tipo_match_sap || "—")}</dd>
+            <dt>Días de diferencia</dt><dd>{invoice.dias_diferencia == null ? "—" : String(invoice.dias_diferencia)}</dd>
+          </dl></section>
+          <section><h3>Sitio y recepción</h3><dl>
+            <dt>Sitio de consumo</dt><dd>{String(invoice.sitio_consumo || "Pendiente de captura manual")}</dd><dt>Centro</dt><dd>{String(invoice.werks || "—")}</dd>
+            <dt>Recepción MSEG</dt><dd>{invoice.tiene_recepcion_mseg ? "Confirmada" : "No disponible"}</dd>
+            {invoice.tiene_recepcion_mseg ? <><dt>Cantidad MSEG</dt><dd>{String(invoice.mseg_cantidad || "—")}</dd><dt>Importe MSEG</dt><dd>{money.format(Number(invoice.mseg_importe || 0))}</dd></> : null}
+          </dl></section>
+        </div> : null}
+      </aside>
+    </>
   );
 }
 
