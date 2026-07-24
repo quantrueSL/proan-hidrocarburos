@@ -12,11 +12,7 @@ import type {
   HydrocarburosSummary
 } from "@/types/hidrocarburos";
 
-export default async function HidrocarburosPage({
-  searchParams
-}: {
-  searchParams?: { module?: string | string[] };
-}) {
+export default async function HidrocarburosPage() {
   const session = requireSession();
   let catalog: HydrocarburosCatalog = { fecha_minima: null, fecha_maxima: null, proveedores: [], sitios: [] };
   let summary: HydrocarburosSummary | null = null;
@@ -41,7 +37,6 @@ export default async function HidrocarburosPage({
       initialError={error}
       initialFilters={filters}
       initialInvoices={invoices}
-      initialModule={searchParams?.module === "m2" ? "m2" : "m1"}
       initialSummary={summary}
     />
   );

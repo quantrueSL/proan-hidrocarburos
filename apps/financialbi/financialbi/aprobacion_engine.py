@@ -116,7 +116,13 @@ _SELECT_COLA = """
         f.serie, CAST(f.folio AS STRING) AS folio, DATE(f.fecha) AS fecha,
         f.id_proveedor, COALESCE(v.razon_social, f.emisor_rfc) AS proveedor,
         f.importe_gas, f.es_mixta,
-        s.estado_sap, s.werks, s.sitio_consumo
+        -- Evidencia SAP completa (Módulo 2 "consultar a SAP y mostrar"): antes vivía en
+        -- una vista M2 aparte de solo lectura; ahora se ve donde Compras valida.
+        s.estado_sap, s.fuente_sap, s.werks, s.sitio_consumo, s.direccion_sitio,
+        s.tipo_match_sap, s.belnr_sap, s.fecha_registro_sap, s.dias_diferencia,
+        s.estado_pago_sap, s.belnr_pago_sap, s.fecha_pago_sap,
+        s.tipo_match_sitio, s.tiene_recepcion_mseg,
+        s.mseg_cantidad, s.mseg_valor_unitario, s.mseg_importe
 """
 
 
@@ -167,11 +173,19 @@ def historial() -> list[dict[str, Any]]:
 
 def catalogo_ceco() -> list[dict[str, Any]]:
     """Sugerencia (D29, no bloqueante) -- snapshot fechado sin pipeline de
-    refresco conocido, ver Datos/PHASE1/hallazgos.md §24 y Esquema.md."""
+    refresco conocido, ver Datos/PHASE1/hallazgos.md §24 y Esquema.md.
+
+    Acotado a KOKRS='PROA' (area de control de Proan): CSKT no trae sociedad/RFC
+    (BUKRS), pero KOKRS parte el maestro en PROA (5.699, Proan -- aqui vive el
+    unico CECO real del gas, 0000042060), SC01 (4.075, otra empresa: retail de
+    alimentos) y PREU (27, vehiculos/activos). Simetrico con catalogo_sitios(),
+    que excluye la red MK## de Maka. NO se acota a los CECOs vistos en gas (solo
+    1-2 en MSEG): el dato ligado a la factura casi nunca existe, asi que Compras
+    necesita el universo valido de Proan, no la lista de los ya conciliados."""
     query = f"""
       SELECT DISTINCT KOSTL AS id, LTEXT AS nombre
       FROM {_CECO_CATALOGO}
-      WHERE DATBI = '99991231' AND LTEXT IS NOT NULL
+      WHERE DATBI = '99991231' AND LTEXT IS NOT NULL AND KOKRS = 'PROA'
       ORDER BY nombre
     """
     return _rows(query)

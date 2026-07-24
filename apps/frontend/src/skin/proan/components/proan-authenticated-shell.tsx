@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { LogoutButton } from "@/components/logout-button";
 import { ProfilePanel } from "@/components/profile-panel";
 import type { FrontendSession } from "@/types/auth";
@@ -25,9 +25,8 @@ type ProanAuthenticatedShellProps = {
 
 type NavItem = {
   href: string;
-  key: "hydrocarburos-m1" | "hydrocarburos-m2" | "aprobacion" | "dashboard";
+  key: "hydrocarburos-m1" | "compras" | "gerencia" | "dashboard";
   label: string;
-  module?: "m1" | "m2";
 };
 
 function BookIcon() {
@@ -60,7 +59,7 @@ function LogoutIcon() {
 
 function getHomeHref(features: ShellFeatures): string {
   if (features.hydrocarburos.enabled) {
-    return "/hidrocarburos?module=m1";
+    return "/hidrocarburos";
   }
   return "/";
 }
@@ -72,49 +71,38 @@ export function ProanAuthenticatedShell({
   session
 }: ProanAuthenticatedShellProps) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isNavOpen, setIsNavOpen] = useState(false);
   const [isDictionaryOpen, setIsDictionaryOpen] = useState(false);
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   useEffect(() => {
-    setIsSidebarOpen(false);
+    setIsNavOpen(false);
     setIsDictionaryOpen(false);
   }, [pathname]);
 
   const homeHref = getHomeHref(features);
   const navItems: NavItem[] = features.hydrocarburos.enabled
     ? [
-        { href: "/hidrocarburos?module=m1", key: "hydrocarburos-m1", label: "M1", module: "m1" },
-        { href: "/hidrocarburos?module=m2", key: "hydrocarburos-m2", label: "M2", module: "m2" },
-        { href: "/aprobacion", key: "aprobacion", label: "M3" },
+        { href: "/hidrocarburos", key: "hydrocarburos-m1", label: "M1 · Clasificación" },
+        { href: "/compras", key: "compras", label: "M2 · Compras" },
+        { href: "/aprobacion", key: "gerencia", label: "M3 · Aprobación" },
         { href: "/dashboard", key: "dashboard", label: "Dashboard" }
       ]
     : [];
 
   function isActive(item: NavItem) {
-    if (item.module) return pathname === "/hidrocarburos" && (searchParams.get("module") || "m1") === item.module;
     return pathname === item.href || pathname?.startsWith(`${item.href}/`);
   }
 
   return (
     <>
       <div className="proan-shell">
-        {isSidebarOpen ? (
-          <button
-            aria-label="Cerrar menu lateral"
-            className="proan-shell-backdrop"
-            onClick={() => setIsSidebarOpen(false)}
-            type="button"
-          />
-        ) : null}
-
         <header className="app-topbar proan-topbar">
           <button
-            aria-expanded={isSidebarOpen}
+            aria-expanded={isNavOpen}
             aria-label="Abrir navegacion"
-            className={`topbar-menu-toggle${isSidebarOpen ? " is-open" : ""}`}
-            onClick={() => setIsSidebarOpen((current) => !current)}
+            className={`topbar-menu-toggle${isNavOpen ? " is-open" : ""}`}
+            onClick={() => setIsNavOpen((current) => !current)}
             type="button"
           >
             <span />
@@ -134,7 +122,19 @@ export function ProanAuthenticatedShell({
             </span>
           </Link>
 
-          <nav className={`topbar-nav proan-topbar-actions${isSidebarOpen ? " is-open" : ""}`}>
+          <nav className={`topbar-nav proan-topbar-actions${isNavOpen ? " is-open" : ""}`}>
+            {navItems.map((item) => (
+              <Link
+                aria-current={isActive(item) ? "page" : undefined}
+                className={`topbar-nav-action topbar-nav-link${isActive(item) ? " is-active" : ""}`}
+                href={item.href}
+                key={item.key}
+                onClick={() => setIsNavOpen(false)}
+              >
+                {item.label}
+              </Link>
+            ))}
+
             <div className="topbar-dictionary">
               <button
                 aria-expanded={isDictionaryOpen}
@@ -185,24 +185,6 @@ export function ProanAuthenticatedShell({
             </LogoutButton>
           </nav>
         </header>
-
-        <aside className={`proan-sidebar${isSidebarOpen ? " is-open" : ""}`}>
-          <nav className="proan-sidebar-nav">
-            {navItems.map((item) => (
-              <Link
-                aria-label={item.label}
-                className={`proan-sidebar-link${isActive(item) ? " is-active" : ""}`}
-                href={item.href}
-                key={item.key}
-                onClick={() => setIsSidebarOpen(false)}
-              >
-                <span aria-hidden="true" className="proan-sidebar-link-icon">
-                </span>
-                <span className="proan-sidebar-link-label">{item.label}</span>
-              </Link>
-            ))}
-          </nav>
-        </aside>
 
         <div className="proan-shell-content">
           <div className="proan-content-scroll">

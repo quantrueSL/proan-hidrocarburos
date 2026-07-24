@@ -8,6 +8,9 @@ flowchart LR
         centros["D20_DIMENSION.dm_centros"]
         material["D20_DIMENSION.dm_material"]
         mseg["D00_SANDBOX.proan_MSEG_HIDROCARBUROS_20260714"]
+        bsak["D00_SANDBOX.proan_BSAK_* (proveedor compensado / pagado)"]
+        bsik["D00_SANDBOX.proan_BSIK_* (proveedor abierto / pendiente)"]
+        t001w["D00_SANDBOX.proan_T001W_* (dirección física de planta)"]
     end
 
     subgraph Queries["ConsultasBigQuery/"]
@@ -44,6 +47,9 @@ flowchart LR
     centros --> q3
     material --> q3
     mseg --> q3
+    bsak --> q3
+    bsik --> q3
+    t001w --> q3
     q3 --> gold_sap
 
     gold_folio -.-> backend

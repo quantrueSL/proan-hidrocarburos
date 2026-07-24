@@ -28,6 +28,15 @@
 --   redondeo de <=1 centavo entre SubTotal y la suma de Importe -- sin tolerancia daba 83%
 --   mixtas en vez del ~74% esperado (Fase 1 §16); con tolerancia, 781/1051 = 74.3%.
 
+-- Trazabilidad de clasificación (jul-2026): claves_gas + conceptos_gas exponen QUÉ clave
+-- SAT y QUÉ concepto clasificaron cada factura como gas -- la clasificación deja de ser una
+-- caja negra ("¿por qué es gas esta factura?") y se vuelve auditable línea a línea. Hace
+-- visible de paso que el universo real incluye 83101600/83101601 (GNC como servicio) además
+-- de las 6 claves-producto 151115xx de la Propuesta -- el gas se factura a veces como
+-- servicio, no como producto, así que ceñirse a las 6 dejaría fuera facturas de gas reales.
+-- El predicado de gas se calcula una sola vez (es_linea_gas en cfdis_flagged) en vez de
+-- repetirlo en cada agregado.
+
 CREATE OR REPLACE TABLE `proan-quantrue.D60_REPORTING.HCARB_GOLD_CLASIFICACION_FOLIO` AS
 WITH cfdis_dedup AS (
   SELECT * EXCEPT(rn)
@@ -42,10 +51,15 @@ WITH cfdis_dedup AS (
   )
   WHERE rn = 1
 ),
+cfdis_flagged AS (
+  SELECT *,
+    (ClaveProdServ LIKE '151115%' OR ClaveProdServ IN ('83101600', '83101601')) AS es_linea_gas
+  FROM cfdis_dedup
+),
 uuids_gas AS (
   SELECT DISTINCT UUID
-  FROM cfdis_dedup
-  WHERE ClaveProdServ LIKE '151115%' OR ClaveProdServ IN ('83101600', '83101601')
+  FROM cfdis_flagged
+  WHERE es_linea_gas
 )
 SELECT
   c.UUID AS uuid,
@@ -65,11 +79,29 @@ SELECT
   ANY_VALUE(c.SubTotal) AS subtotal,
   ANY_VALUE(c.Total) AS total,
   ANY_VALUE(c.TotalImpuestosTrasladados) AS total_impuestos_trasladados,
-  SUM(IF(c.ClaveProdServ LIKE '151115%' OR c.ClaveProdServ IN ('83101600', '83101601'), c.Importe, 0)) AS importe_gas,
-  ANY_VALUE(c.SubTotal) - SUM(IF(c.ClaveProdServ LIKE '151115%' OR c.ClaveProdServ IN ('83101600', '83101601'), c.Importe, 0)) > 0.01 AS es_mixta,
-  COUNTIF(c.ClaveProdServ LIKE '151115%' OR c.ClaveProdServ IN ('83101600', '83101601')) AS n_lineas_gas,
-  COUNT(*) AS n_lineas_total
-FROM cfdis_dedup c
+  SUM(IF(c.es_linea_gas, c.Importe, 0)) AS importe_gas,
+  ANY_VALUE(c.SubTotal) - SUM(IF(c.es_linea_gas, c.Importe, 0)) > 0.01 AS es_mixta,
+  COUNTIF(c.es_linea_gas) AS n_lineas_gas,
+  COUNT(*) AS n_lineas_total,
+  -- Claves SAT distintas que clasificaron la factura como gas (para badge/filtro).
+  ARRAY_AGG(DISTINCT IF(c.es_linea_gas, c.ClaveProdServ, NULL) IGNORE NULLS) AS claves_gas,
+  -- Líneas de gas con su clave + descripción + cantidad/unidad/importe (evidencia de por qué
+  -- la factura es gas). Grano línea anidado dentro de la factura, ordenado por importe desc.
+  ARRAY_AGG(
+    IF(c.es_linea_gas,
+       STRUCT(
+         c.ClaveProdServ AS clave,
+         c.Descripcion AS descripcion,
+         c.Cantidad AS cantidad,
+         c.ClaveUnidad AS clave_unidad,
+         c.ValorUnitario AS valor_unitario,
+         c.Importe AS importe
+       ),
+       NULL)
+    IGNORE NULLS
+    ORDER BY c.Importe DESC
+  ) AS conceptos_gas
+FROM cfdis_flagged c
 JOIN uuids_gas g ON c.UUID = g.UUID
 LEFT JOIN `proan-quantrue.D50_AGGREGATE_RENTABILIDAD.HCARB_STG_VENDORS` v
   ON UPPER(TRIM(c.EmisorRfc)) = UPPER(TRIM(v.rfc))

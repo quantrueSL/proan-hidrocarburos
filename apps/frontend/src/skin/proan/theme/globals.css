@@ -5017,8 +5017,10 @@ button:focus-visible,
   height: 100vh;
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
-  grid-template-rows: 84px minmax(0, 1fr);
+  /* Nav vive en la topbar (no hay sidebar): una sola columna. La fila de la
+     topbar crece si hace falta (desplegable móvil), con un mínimo de 84px. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(84px, auto) minmax(0, 1fr);
   overflow: hidden;
   background:
     radial-gradient(circle at top left, rgba(222, 113, 46, 0.12), transparent 28%),
@@ -5197,7 +5199,7 @@ button:focus-visible,
 }
 
 .proan-shell-content {
-  grid-column: 2;
+  grid-column: 1 / -1;
   grid-row: 2;
   min-width: 0;
   min-height: 0;
@@ -7175,7 +7177,13 @@ body.proan-report-assistant-open .proan-content-scroll {
 .hydro-page[data-module="m1"] > .hydro-table-card:not(.hydro-module-table) { display: none; }
 .hydro-table-title span { display: block; margin-top: 6px; color: #777068; font-size: 12px; }
 .hydro-table-title h2 { font-size: 20px; }
-.hydro-detail--m1 .hydro-detail-body section:not(:first-child), .hydro-detail--m2 .hydro-detail-body section:first-child { display: none; }
+.hydro-detail--m1 .hydro-detail-body .hydro-section--sap, .hydro-detail--m1 .hydro-detail-body .hydro-section--sitio { display: none; }
+.hydro-detail--m2 .hydro-detail-body .hydro-section--cfdi, .hydro-detail--m2 .hydro-detail-body .hydro-section--conceptos { display: none; }
+.hydro-conceptos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.hydro-conceptos li { padding: 10px 12px; border: 1px solid #ebe5dc; border-radius: 8px; background: #faf7f2; }
+.hydro-concepto-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.hydro-conceptos li p { margin: 0; font-size: 13px; color: #4a443d; line-height: 1.4; }
+.hydro-conceptos li small { display: block; margin-top: 6px; color: #777068; font-size: 12px; }
 .hydro-page[data-module="m1"] .hydro-header p, .hydro-page[data-module="m2"] .hydro-header p { font-size: 0; }
 .hydro-page[data-module="m1"] .hydro-header p::after, .hydro-page[data-module="m2"] .hydro-header p::after { font-size: 11px; }
 .hydro-page[data-module="m1"] .hydro-header p::after { content: "HIDROCARBUROS · M1"; }
@@ -7194,7 +7202,7 @@ body.proan-report-assistant-open .proan-content-scroll {
 
 /* Hidrocarburos: densidad operativa y superficies más sobrias. */
 @media (min-width: 981px) {
-  .proan-shell { grid-template-columns: 196px minmax(0, 1fr); }
+  .proan-shell { grid-template-columns: minmax(0, 1fr); }
   .proan-sidebar { width: 196px; padding: 12px 10px; }
   .proan-sidebar-link { justify-content: flex-start; gap: 10px; min-height: 42px; padding: 9px 11px; border-radius: 10px; text-align: left; }
   .proan-sidebar-link-label { display: block; min-width: 0; font-size: 12px; letter-spacing: .01em; }
@@ -7233,7 +7241,7 @@ body.proan-report-assistant-open .proan-content-scroll {
 
 /* Hidrocarburos: vista de trabajo de una pantalla. */
 @media (min-width: 981px) {
-  .proan-shell { grid-template-columns: 84px minmax(0, 1fr); }
+  .proan-shell { grid-template-columns: minmax(0, 1fr); }
   .proan-sidebar { width: 84px; padding: 12px 8px; }
   .proan-sidebar-link { justify-content: center; min-height: 40px; padding: 8px; border-radius: 9px; }
   .proan-sidebar-link-label { font-size: 12px; font-weight: 800; letter-spacing: .04em; }
@@ -7280,7 +7288,7 @@ body.proan-report-assistant-open .proan-content-scroll {
 
 /* Hidrocarburos: composición mínima, con foco en datos. */
 @media (min-width: 981px) {
-  .proan-shell { grid-template-columns: 56px minmax(0, 1fr); }
+  .proan-shell { grid-template-columns: minmax(0, 1fr); }
   .proan-sidebar { width: 56px; padding: 10px 5px; }
   .proan-sidebar-link { min-height: 38px; padding: 7px 3px; border-radius: 8px; }
   .proan-sidebar-link-label { font-size: 11px; }
@@ -7403,12 +7411,13 @@ body.proan-report-assistant-open .proan-content-scroll {
 .approval-error { margin: 0; color: #a44925; font-size: 13px; }
 .approval-content { display: grid; min-height: 0; grid-template-columns: minmax(0, 1fr); border-top: 1px solid #dedbd4; }.approval-table-area { min-width: 0; min-height: 0; }.approval-table-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; padding: 14px 18px 11px; }.approval-table-heading > span { color: #777068; font-size: 12px; font-weight: 700; white-space: nowrap; }
 .approval-table-wrap { min-height: 0; overflow: auto; scrollbar-color: #c97943 #f3ede5; scrollbar-width: thin; }.approval-table-wrap::-webkit-scrollbar { width: 10px; height: 10px; }.approval-table-wrap::-webkit-scrollbar-track { background: #f3ede5; }.approval-table-wrap::-webkit-scrollbar-thumb { border: 2px solid #f3ede5; border-radius: 999px; background: #c97943; }.approval-table-wrap table { width: 100%; border-collapse: collapse; font-size: 13px; }.approval-table-wrap th, .approval-table-wrap td { border-top: 1px solid #eeeae4; padding: 10px 14px; text-align: center; vertical-align: middle; }.approval-table-wrap th { background: rgba(241, 237, 230, .75); color: #777068; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }.approval-table-wrap td { color: #343735; }.approval-table-wrap td:nth-child(2) { text-align: left; }.approval-table-wrap td:nth-child(4) { font-weight: 750; }.approval-table-wrap tbody tr { cursor: pointer; }.approval-table-wrap tbody tr:nth-child(even) { background: rgba(248, 245, 239, .48); }.approval-table-wrap tbody tr:hover, .approval-table-wrap tbody tr.is-selected { background: rgba(247, 229, 213, .62); outline: none; }.approval-empty { margin: 0; padding: 24px; color: #777068; font-size: 13px; text-align: center; }
+.approval-sap-tag { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 10px; font-weight: 800; letter-spacing: .03em; white-space: nowrap; }.approval-sap-tag.is-ok { background: rgba(30, 107, 74, .12); color: #1e6b4a; }.approval-sap-tag.is-warn { background: rgba(197, 92, 39, .13); color: #a4551f; }
 .approval-detail-backdrop { position: fixed; z-index: 29; inset: 0; border: 0; background: rgba(30, 27, 23, .28); cursor: default; }.approval-detail { display: none; min-height: 0; background: #fffdf9; }.approval-detail.is-open { position: fixed; z-index: 30; top: 50%; left: 50%; display: block; width: min(660px, calc(100vw - 48px)); max-height: min(760px, calc(100vh - 72px)); overflow-y: auto; transform: translate(-50%, -50%); border: 1px solid #ded8cf; border-radius: 12px; box-shadow: 0 24px 64px rgba(36, 29, 20, .24); }.approval-detail-placeholder { display: grid; height: 100%; min-height: 280px; place-items: center; color: #918a80; font-size: 13px; text-align: center; }.approval-detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 17px 18px; border-bottom: 1px solid #e6e0d8; }.approval-detail-header p { margin: 0; color: #8b5234; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }.approval-detail-header h2 { margin: 4px 0 0; color: #292d2c; font-family: var(--font-proan-primary); font-size: 20px; }
 .approval-invoice-data, .approval-audit dl { display: grid; grid-template-columns: minmax(94px, .8fr) minmax(0, 1.35fr); gap: 7px 10px; margin: 0; padding: 16px 18px; border-bottom: 1px solid #e6e0d8; font-size: 12px; }.approval-invoice-data dt, .approval-audit dt { color: #777068; }.approval-invoice-data dd, .approval-audit dd { margin: 0; color: #343735; overflow-wrap: anywhere; text-align: right; }.approval-form, .approval-audit > .approval-field { display: grid; gap: 13px; padding: 16px 18px; }.approval-audit > p { margin: 0; padding: 16px 18px 0; color: #8b5234; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }.approval-audit dl { padding-top: 10px; }
 .approval-field { display: grid; gap: 5px; color: #6b6258; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }.approval-field input, .approval-field textarea { width: 100%; border: 0; border-bottom: 1px solid #cfc2b2; background: transparent; color: #2d302f; font: inherit; font-size: 13px; font-weight: 600; outline: 0; padding: 5px 1px; }.approval-field textarea { min-height: 52px; resize: vertical; }.approval-field input:focus, .approval-field textarea:focus { border-color: #df712e; }
 .approval-actions, .approval-reject { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 16px 18px; }.approval-text-button { border: 0; background: transparent; color: #9a572f; cursor: pointer; font: inherit; font-size: 12px; font-weight: 750; }.approval-primary-button, .approval-reject-button { border: 0; border-radius: 6px; background: #dc6b2b; color: #fff; cursor: pointer; font: inherit; font-size: 12px; font-weight: 800; padding: 9px 12px; }.approval-reject-button { background: #8f3f25; }.approval-primary-button:disabled, .approval-reject-button:disabled, .approval-text-button:disabled { cursor: not-allowed; opacity: .55; }.approval-reject { display: grid; justify-content: stretch; border-top: 1px solid #e6e0d8; }.approval-reject p { margin: 0; color: #7a5547; font-size: 12px; }.approval-reject div { display: flex; justify-content: flex-end; gap: 10px; }
 
-@media (min-width: 1100px) { .proan-main-panel:has(.approval-page) { min-height: 0; }.approval-page { height: 100%; min-height: 0; grid-template-rows: 58px 34px 66px minmax(0, 1fr); }.approval-content { overflow: hidden; }.approval-table-area { display: grid; grid-template-rows: auto minmax(0, 1fr); }.approval-detail { overflow-y: auto; } }
+@media (min-width: 1100px) { .proan-main-panel:has(.approval-page) { min-height: 0; }.approval-page { height: 100%; min-height: 0; display: flex; flex-direction: column; }.approval-content { flex: 1 1 auto; overflow: hidden; }.approval-table-area { display: grid; grid-template-rows: auto minmax(0, 1fr); }.approval-detail { overflow-y: auto; } }
 @media (max-width: 900px) { .approval-page { gap: 18px; padding: 20px 0 30px; }.approval-content { grid-template-columns: 1fr; }.approval-table-wrap { overflow-x: auto; }.approval-table-wrap table { min-width: 730px; }.approval-detail.is-open { width: calc(100vw - 24px); max-height: calc(100vh - 32px); border-radius: 10px; }.approval-detail-placeholder { display: none; }.approval-kpis { gap: 14px 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }.approval-kpis > div { min-height: 64px; padding: 7px 8px; }.approval-kpis > div:nth-child(3) { grid-column: 1 / -1; }.approval-kpis strong { font-size: 21px; }.approval-table-heading { padding-right: 0; padding-left: 0; }.approval-role-tabs { gap: 18px; }.approval-invoice-data, .approval-audit dl { grid-template-columns: 1fr; gap: 3px; }.approval-invoice-data dd, .approval-audit dd { margin-bottom: 7px; text-align: left; } }
 
 /* Dashboard (Propuesta.md §3) -- reutiliza la paleta de .approval-* (naranja

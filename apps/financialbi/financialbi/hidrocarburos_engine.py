@@ -117,7 +117,7 @@ def search(*, page: int, page_size: int, **filters: Any) -> dict[str, Any]:
       SELECT
         f.uuid, DATE(f.fecha) AS fecha, f.serie, CAST(f.folio AS STRING) AS folio,
         f.id_proveedor, COALESCE(v.razon_social, f.emisor_rfc) AS proveedor,
-        f.importe_gas, f.es_mixta, s.estado_sap, s.werks, s.sitio_consumo,
+        f.importe_gas, f.es_mixta, f.claves_gas, s.estado_sap, s.werks, s.sitio_consumo,
         s.tiene_recepcion_mseg
       {_base_query()}
       WHERE {where}
@@ -138,7 +138,7 @@ def detail(uuid: str) -> dict[str, Any] | None:
         f.receptor_rfc, DATE(f.fecha) AS fecha, f.fecha_timbrado,
         f.tipo_de_comprobante, f.moneda, f.metodo_pago, f.forma_pago,
         f.subtotal, f.total, f.total_impuestos_trasladados, f.importe_gas,
-        f.es_mixta, f.n_lineas_gas, f.n_lineas_total,
+        f.es_mixta, f.n_lineas_gas, f.n_lineas_total, f.claves_gas, f.conceptos_gas,
         s.estado_sap, s.tipo_match_sap, s.belnr_sap, s.fecha_registro_sap,
         s.dias_diferencia, s.werks, s.sitio_consumo, s.tipo_match_sitio,
         s.tiene_recepcion_mseg, s.mseg_cantidad, s.mseg_valor_unitario, s.mseg_importe
