@@ -19,7 +19,8 @@ filtro de material de gas ausente en el extracto MSEG (inflaba
 mixtas en vez de ~74%). Cifras finales contra los benchmarks de Fase 1: 1.051
 facturas, ~$40.2M, 11 proveedores, 74.3% mixtas, 898 validada_sap (solo RE; hoy
 955 con la 2ª fuente de validación, ver abajo), 569 con sitio, 21 con recepción
-MSEG — todo dentro de lo esperado.
+MSEG — todo dentro de lo esperado. **El "21 con recepción MSEG" resultó ser el
+bug, no el hallazgo** — ver el fix de más abajo, que lo sube a 505.
 
 **D26:** `HCARB_GOLD_CLASIFICACION_LINEA` (no bug) salió con el mismo número
 de filas que `_FOLIO` (1.051=1.051) — los conceptos no-gas de una factura
@@ -77,6 +78,57 @@ calle, `ORT01` ciudad, `REGIO` región). Se expone en la columna nueva `direccio
 (concatena solo las partes no vacías; p.ej. PAN1 = "Km.2 Carret. San Juan - Guadal, JAL"),
 para el mismo ~58% de facturas con `WERKS` resuelto. La calle viene truncada en el propio
 maestro SAP. `ORT01`/`PSTLZ` suelen venir vacías.
+
+**Fix del cruce CFDI↔MSEG (Fase-1-bis-2, jul-2026): 2% → 48%.** El filtro de
+"es gas" en MSEG (`MATNR` en el catálogo de 6 materiales de `dm_material`)
+descartaba las recepciones que SAP contabiliza por cuenta contable directa
+sin material (`MATNR` vacío, `SAKTO='0005010611'`) — el patrón **dominante**
+incluso para el único proveedor con `MATNR` poblado (Gas Noel: 4.991 filas
+por cuenta vs. 52 por material). El filtro correcto es por proveedor
+(`LIFNR` = uno de los 11 ya identificados en `HCARB_STG_VENDORS`), no por
+material — estas 11 son distribuidoras de gas dedicadas, así que no hay
+riesgo de colar diésel/insecticida al quitar el filtro de material. Se portó
+también el patrón de score+fallback numérico de folio (como `sap_match`/
+`sitio_match`) y agregación a grano documento (`MBLNR`, confirmando que
+`XBLNR_MKPF`/`BUDAT_MKPF` son de cabecera). Resultado: `tiene_recepcion_mseg`
+(booleano) se reemplaza por `confianza_mseg` (`'Alta'`/`'Media'`/`NULL`) —
+505/1.056 (48%) con evidencia de recepción (54 Alta: folio e importe casan
+exacto; 451 Media: solo el folio casa, el documento SAP suele ser una
+recepción consolidada de varias entregas/facturas, así que su importe no
+reconcilia el monto de esta factura en particular). Auditado contra
+BigQuery real (`ZZ_PRUEBAS.hcarb_mseg_scored_try`): 0 UUIDs/documentos
+duplicados, 0 colisiones de folio por proveedor. Corrige también el
+hallazgo "~98% sin MSEG" de Fase 1 (ver `Datos/PHASE1/hallazgos.md` y
+`Esquema.md`, corregidos con addendum) — era un artefacto del filtro de
+material, no un techo estructural de los datos.
+
+**CECO sugerido (jul-2026, revierte D22): 51% de las facturas.** Se midió que
+solo 201/505 documentos MSEG traen un `KOSTL` único y limpio (la mitad reparte
+el gasto entre 2-14 centros de coste sin que ninguno domine) — pero **6 de los
+11 proveedores son de un solo sitio real** (≥95% de concentración histórica),
+así que su CECO es predecible por proveedor, sin depender del match de
+documento. Columna nueva `ceco_sugerido` (patrón de proveedor → `KOSTL` del
+documento, uno o varios separados por coma → `NULL`): 543/1.056 con
+sugerencia (292 únicas, 251 con varios candidatos). Prellena el campo CECO en
+`aprobacion-workspace.tsx`, sigue 100% editable — nunca bloquea.
+
+**Cutoff de fecha de negocio `>=2026-01-01` (D31, jul-2026): 1.056 → 547 facturas.**
+`proan_MSEG_HIDROCARBUROS_20260714` solo cubre `MJAHR=2026`, pero `cfdis` no
+tenía piso de fecha y arrancaba ~jun-2025 — ~7 de ~13-14 meses que MSEG nunca
+podía validar (el dato no existe en SAP para ese rango), diluyendo los
+indicadores de cobertura. Se añadió `DECLARE cutoff_fecha_negocio DATE DEFAULT
+'2026-01-01'` en `HCARB_gold_clasificacion.sql`, exigiendo `FechaTimbrado` **y**
+`Fecha` `>=` el cutoff (ambos campos, no solo uno) en el `WHERE` de `cfdis_dedup`
+— único punto de corte, `HCARB_gold_validacion_sap.sql` lo hereda vía el `JOIN`
+a `HCARB_GOLD_CLASIFICACION_FOLIO`, y `catalog()`/frontend/dashboard no
+necesitaron ningún cambio de código. Efecto medido contra BigQuery real:
+`confianza_mseg` (Alta/Media) sube de 48% a **90,7%** (confirma que el 48%
+previo era un artefacto de cobertura temporal, no un techo de matching real),
+`validada_sap` 90,4%→91,0%, `con_sitio` 70,4% (antes ~58%, medido sobre el
+histórico completo con peor cobertura SAP). Huérfanos pre-2026 en las tablas
+mutables `HCARB_gold_aprobacion` (509 filas, ninguna ya `aprobada`/`rechazada`)
+y `HCARB_ESTATUS_SAT` (506 filas) se borraron con `DELETE` explícito. Detalle
+completo en `Datos/PHASE2/resumen.md` D31.
 
 ## Datasets (reutilizados, ninguno nuevo)
 

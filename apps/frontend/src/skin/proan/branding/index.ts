@@ -1,6 +1,6 @@
 export const proanBranding = {
-  productName: "FinancialAI",
-  metadataTitle: "FinancialAI",
-  metadataDescription: "Frontend React de FinancialAI para Proan.",
-  loginTitle: "FinancialAI",
+  productName: "Hidrocarburos",
+  metadataTitle: "Hidrocarburos",
+  metadataDescription: "Frontend React de Hidrocarburos para Proan.",
+  loginTitle: "Hidrocarburos",
 } as const;

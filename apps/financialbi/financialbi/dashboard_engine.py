@@ -4,8 +4,14 @@ sueltas, mismo criterio de "menos queries" que el resto del proyecto.
 
 A. Resumen de estatus: total emitidas, validadas (pasaron Compras), aprobadas,
    rechazadas, pendientes -- más lo que aporta D24 (estatus_sat.py): vigentes/
-   canceladas/sin consultar ante el SAT.
-B. Análisis de gasto: por CECO, por sitio, acumulado por periodo (mensual).
+   canceladas/sin consultar ante el SAT, y la cobertura MSEG (jul-2026, ver
+   HCARB_gold_validacion_sap.sql -- confianza_mseg Alta/Media/sin evidencia).
+B. Análisis de gasto: por proveedor, por sitio, cobertura CECO/sitio combinada,
+   y acumulado por periodo (mensual).
+
+Filtros (jul-2026): fecha_desde/fecha_hasta + proveedor_id/estado_sap/
+confianza_mseg/estatus_sat acotan las 5 queries a la vez (mismo WHERE
+compartido), vía el panel de filtros lateral (igual criterio que M2/M3).
 
 No se desglosa por "sociedad" (Propuesta original) porque el alcance actual
 (D1/D2, provisional) es una sola razón social -- si se ratifica ampliar el
@@ -14,22 +20,66 @@ alcance, añadir esa dimensión aquí.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from datetime import date
 from typing import Any
 
-from financialbi.aprobacion_engine import sync_pendientes
+from google.cloud import bigquery
+
 from financialbi.db import _get_bq_client
-from financialbi.hidrocarburos_engine import _FOLIO, _SAP
+from financialbi.hidrocarburos_engine import _FOLIO, _SAP, _VENDORS
 
 _APROBACION = "`proan-quantrue.D60_REPORTING.HCARB_gold_aprobacion`"
 _ESTATUS_SAT = "`proan-quantrue.D60_REPORTING.HCARB_ESTATUS_SAT`"
 
 
-def _rows(query: str) -> list[dict[str, Any]]:
-    result = _get_bq_client().query(query).result()
+def _construir_filtro(
+    fecha_desde: date | None,
+    fecha_hasta: date | None,
+    proveedor_id: str | None,
+    estado_sap: str | None,
+    confianza_mseg: str | None,
+    estatus_sat: str | None,
+) -> tuple[str, list[bigquery.ScalarQueryParameter]]:
+    # f siempre disponible (tabla base); s (_SAP) y e (_ESTATUS_SAT) deben estar
+    # JOINeados en TODAS las sub-queries para que este WHERE compartido resuelva
+    # sin importar cuál de los 5 bloques lo use -- ver joins añadidos abajo.
+    clauses = ["TRUE"]
+    params: list[bigquery.ScalarQueryParameter] = []
+    if fecha_desde:
+        clauses.append("DATE(f.fecha) >= @fecha_desde")
+        params.append(bigquery.ScalarQueryParameter("fecha_desde", "DATE", fecha_desde))
+    if fecha_hasta:
+        clauses.append("DATE(f.fecha) <= @fecha_hasta")
+        params.append(bigquery.ScalarQueryParameter("fecha_hasta", "DATE", fecha_hasta))
+    if proveedor_id:
+        clauses.append("f.id_proveedor = @proveedor_id")
+        params.append(bigquery.ScalarQueryParameter("proveedor_id", "STRING", proveedor_id))
+    if estado_sap:
+        clauses.append("s.estado_sap = @estado_sap")
+        params.append(bigquery.ScalarQueryParameter("estado_sap", "STRING", estado_sap))
+    if confianza_mseg:
+        if confianza_mseg == "sin_evidencia":
+            clauses.append("s.confianza_mseg IS NULL")
+        else:
+            clauses.append("s.confianza_mseg = @confianza_mseg")
+            params.append(bigquery.ScalarQueryParameter("confianza_mseg", "STRING", confianza_mseg))
+    if estatus_sat:
+        if estatus_sat == "sin_confirmar":
+            clauses.append("(e.uuid IS NULL OR e.estatus_cancelacion = 'no_encontrado')")
+        else:
+            clauses.append("e.estatus_cancelacion = @estatus_sat")
+            params.append(bigquery.ScalarQueryParameter("estatus_sat", "STRING", estatus_sat))
+    return " AND ".join(clauses), params
+
+
+def _rows(query: str, params: list[bigquery.ScalarQueryParameter] | None = None) -> list[dict[str, Any]]:
+    job_config = bigquery.QueryJobConfig(query_parameters=params or [])
+    result = _get_bq_client().query(query, job_config=job_config).result()
     return [dict(row.items()) for row in result]
 
 
-def _resumen_estatus() -> dict[str, Any]:
+def _resumen_estatus(where: str, params: list[bigquery.ScalarQueryParameter]) -> dict[str, Any]:
     query = f"""
       SELECT
         COUNT(*) AS total_facturas,
@@ -37,58 +87,129 @@ def _resumen_estatus() -> dict[str, Any]:
         COUNTIF(a.estado = 'aprobada') AS aprobadas,
         COUNTIF(a.estado = 'rechazada') AS rechazadas,
         COUNTIF(COALESCE(a.estado, 'pendiente_validacion_compras') = 'pendiente_validacion_compras') AS pendientes,
+        COUNTIF(a.estado = 'pendiente_aprobacion_gerencia') AS pendientes_gerencia,
         COALESCE(SUM(f.importe_gas), 0) AS importe_gas_total,
         COUNTIF(e.estatus_cancelacion = 'vigente') AS vigentes_sat,
         COUNTIF(e.estatus_cancelacion = 'cancelado') AS canceladas_sat,
-        COUNTIF(e.uuid IS NULL OR e.estatus_cancelacion = 'no_encontrado') AS sin_confirmar_sat
+        COUNTIF(e.uuid IS NULL OR e.estatus_cancelacion = 'no_encontrado') AS sin_confirmar_sat,
+        COUNTIF(s.estado_sap = 'validada_sap') AS validadas_sap,
+        COUNTIF(s.confianza_mseg = 'Alta') AS mseg_alta,
+        COUNTIF(s.confianza_mseg = 'Media') AS mseg_media,
+        COUNTIF(s.confianza_mseg IS NULL) AS mseg_sin_evidencia
       FROM {_FOLIO} f
       LEFT JOIN {_APROBACION} a ON f.uuid = a.uuid
       LEFT JOIN {_ESTATUS_SAT} e ON f.uuid = e.uuid
+      LEFT JOIN {_SAP} s ON f.uuid = s.uuid
+      WHERE {where}
     """
-    rows = _rows(query)
+    rows = _rows(query, params)
     return rows[0] if rows else {}
 
 
-def _gasto_por_ceco() -> list[dict[str, Any]]:
+def _cobertura_ceco_sitio(where: str, params: list[bigquery.ScalarQueryParameter]) -> list[dict[str, Any]]:
+    """Cobertura combinada CECO/sitio -- CECO real es COALESCE(a.ceco, el
+    asignado a mano en Compras, s.ceco_sugerido, evidencia real de SAP/MSEG:
+    ver HCARB_gold_validacion_sap.sql). No es "Sin CECO" al 100% como parecía
+    mirando solo a.ceco -- 543/1056 folios ya tienen ceco_sugerido real."""
     query = f"""
-      SELECT COALESCE(a.ceco, 'Sin CECO') AS grupo, SUM(f.importe_gas) AS importe_gas, COUNT(*) AS n_facturas
-      FROM {_FOLIO} f
-      LEFT JOIN {_APROBACION} a ON f.uuid = a.uuid
+      SELECT
+        CASE
+          WHEN ceco IS NOT NULL AND sitio IS NOT NULL THEN 'Con CECO y sitio'
+          WHEN ceco IS NOT NULL THEN 'Con CECO solo'
+          WHEN sitio IS NOT NULL THEN 'Con sitio solo'
+          ELSE 'Sin nada'
+        END AS grupo,
+        SUM(importe_gas) AS importe_gas,
+        COUNT(*) AS n_facturas
+      FROM (
+        SELECT
+          f.importe_gas,
+          COALESCE(a.ceco, s.ceco_sugerido) AS ceco,
+          COALESCE(a.werks_manual, s.sitio_consumo) AS sitio
+        FROM {_FOLIO} f
+        LEFT JOIN {_APROBACION} a ON f.uuid = a.uuid
+        LEFT JOIN {_SAP} s ON f.uuid = s.uuid
+        LEFT JOIN {_ESTATUS_SAT} e ON f.uuid = e.uuid
+        WHERE {where}
+      )
       GROUP BY grupo
-      ORDER BY importe_gas DESC
+      ORDER BY n_facturas DESC
     """
-    return _rows(query)
+    return _rows(query, params)
 
 
-def _gasto_por_sitio() -> list[dict[str, Any]]:
+def _gasto_por_proveedor(where: str, params: list[bigquery.ScalarQueryParameter]) -> list[dict[str, Any]]:
+    """Gasto por proveedor (razón social) -- dato disponible desde la propia
+    factura, no depende de que Compras/Gerencia hayan avanzado el flujo, así
+    que siempre tiene cobertura completa (a diferencia de CECO/sitio)."""
+    query = f"""
+      SELECT COALESCE(v.razon_social, f.emisor_rfc) AS grupo, SUM(f.importe_gas) AS importe_gas, COUNT(*) AS n_facturas
+      FROM {_FOLIO} f
+      LEFT JOIN {_VENDORS} v ON f.id_proveedor = v.id_proveedor
+      LEFT JOIN {_SAP} s ON f.uuid = s.uuid
+      LEFT JOIN {_ESTATUS_SAT} e ON f.uuid = e.uuid
+      WHERE {where}
+      GROUP BY grupo
+      ORDER BY n_facturas DESC
+    """
+    return _rows(query, params)
+
+
+def _gasto_por_sitio(where: str, params: list[bigquery.ScalarQueryParameter]) -> list[dict[str, Any]]:
     query = f"""
       SELECT COALESCE(a.werks_manual, s.sitio_consumo, 'Sin sitio') AS grupo, SUM(f.importe_gas) AS importe_gas, COUNT(*) AS n_facturas
       FROM {_FOLIO} f
       LEFT JOIN {_APROBACION} a ON f.uuid = a.uuid
       LEFT JOIN {_SAP} s ON f.uuid = s.uuid
+      LEFT JOIN {_ESTATUS_SAT} e ON f.uuid = e.uuid
+      WHERE {where}
       GROUP BY grupo
-      ORDER BY importe_gas DESC
+      ORDER BY n_facturas DESC
     """
-    return _rows(query)
+    return _rows(query, params)
 
 
-def _gasto_por_periodo() -> list[dict[str, Any]]:
+def _gasto_por_periodo(where: str, params: list[bigquery.ScalarQueryParameter]) -> list[dict[str, Any]]:
     query = f"""
       SELECT FORMAT_DATE('%Y-%m', DATE(f.fecha)) AS grupo, SUM(f.importe_gas) AS importe_gas, COUNT(*) AS n_facturas
       FROM {_FOLIO} f
+      LEFT JOIN {_SAP} s ON f.uuid = s.uuid
+      LEFT JOIN {_ESTATUS_SAT} e ON f.uuid = e.uuid
+      WHERE {where}
       GROUP BY grupo
       ORDER BY grupo
     """
-    return _rows(query)
+    return _rows(query, params)
 
 
-def resumen_completo() -> dict[str, Any]:
+def resumen_completo(
+    *,
+    fecha_desde: date | None = None,
+    fecha_hasta: date | None = None,
+    proveedor_id: str | None = None,
+    estado_sap: str | None = None,
+    confianza_mseg: str | None = None,
+    estatus_sat: str | None = None,
+) -> dict[str, Any]:
     """Todo el payload del dashboard en una sola llamada de red desde el
-    frontend (aunque internamente sean 4 queries -- una por bloque)."""
-    sync_pendientes()  # para que "pendientes"/"total" incluyan altas recién llegadas de M1
+    frontend (aunque internamente sean 5 queries -- una por bloque). Los
+    filtros acotan todo el payload a la vez, para que los números siempre
+    concuerden entre KPIs y gráficos."""
+    where, params = _construir_filtro(fecha_desde, fecha_hasta, proveedor_id, estado_sap, confianza_mseg, estatus_sat)
+    # Cada query de BigQuery tiene un overhead apreciable de creación/espera
+    # aunque el resultado esté cacheado. Son bloques independientes y el cliente
+    # compartido es seguro entre hilos, así que se ejecutan concurrentemente.
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        resumen_future = executor.submit(_resumen_estatus, where, params)
+        proveedor_future = executor.submit(_gasto_por_proveedor, where, params)
+        sitio_future = executor.submit(_gasto_por_sitio, where, params)
+        cobertura_future = executor.submit(_cobertura_ceco_sitio, where, params)
+        periodo_future = executor.submit(_gasto_por_periodo, where, params)
+
     return {
-        "resumen": _resumen_estatus(),
-        "gasto_por_ceco": _gasto_por_ceco(),
-        "gasto_por_sitio": _gasto_por_sitio(),
-        "gasto_por_periodo": _gasto_por_periodo(),
+        "resumen": resumen_future.result(),
+        "gasto_por_proveedor": proveedor_future.result(),
+        "gasto_por_sitio": sitio_future.result(),
+        "cobertura_ceco_sitio": cobertura_future.result(),
+        "gasto_por_periodo": periodo_future.result(),
     }

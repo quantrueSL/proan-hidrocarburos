@@ -14,7 +14,7 @@ import type {
 
 export default async function HidrocarburosPage() {
   const session = requireSession();
-  let catalog: HydrocarburosCatalog = { fecha_minima: null, fecha_maxima: null, proveedores: [], sitios: [] };
+  let catalog: HydrocarburosCatalog = { fecha_minima: null, fecha_maxima: null, proveedores: [], sitios: [], claves_sat: [] };
   let summary: HydrocarburosSummary | null = null;
   let invoices: HydrocarburosSearchResponse | null = null;
   let error: string | null = null;

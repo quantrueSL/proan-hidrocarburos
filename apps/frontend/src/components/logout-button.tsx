@@ -5,11 +5,13 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 type LogoutButtonProps = {
+  ariaLabel?: string;
   children?: ReactNode;
   className?: string;
 };
 
 export function LogoutButton({
+  ariaLabel = "Cerrar sesión",
   children = "Cerrar sesion",
   className
 }: LogoutButtonProps) {
@@ -32,6 +34,7 @@ export function LogoutButton({
 
   return (
     <button
+      aria-label={ariaLabel}
       className={className ?? "btn btn-secondary"}
       disabled={pending}
       onClick={handleLogout}

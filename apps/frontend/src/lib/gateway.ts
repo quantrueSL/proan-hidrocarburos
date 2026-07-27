@@ -9,7 +9,7 @@ import type {
   HydrocarburosSearchResponse,
   HydrocarburosSummary
 } from "@/types/hidrocarburos";
-import type { AprobacionCatalog, AprobacionQueue } from "@/types/aprobacion";
+import type { AprobacionCatalog, AprobacionQueue, AprobacionSearch } from "@/types/aprobacion";
 import type { DashboardData } from "@/types/dashboard";
 
 type FinancialbiFetchOptions = {
@@ -54,7 +54,8 @@ async function financialbiFetchJson<T>(
         ? payload.detail
         : `FinancialBI request failed with status ${response.status}.`;
 
-    throw new Error(detail);
+    console.error("FinancialBI error", { path, status: response.status, detail });
+    throw new Error("No se pudieron cargar los datos. Vuelve a intentarlo en unos instantes.");
   }
 
   return payload as T;
@@ -137,16 +138,26 @@ export async function getHydrocarburosInvoice(
   return financialbiFetchJson<HydrocarburosInvoiceDetail>(`/v1/financialbi/hidrocarburos/invoices/${encodeURIComponent(uuid)}`);
 }
 
-export async function getAprobacionCompras(_session: FrontendSession): Promise<AprobacionQueue> {
-  return financialbiFetchJson<AprobacionQueue>("/v1/financialbi/hidrocarburos/aprobacion/compras");
+// Query string para GET -- omite valores vacíos/"all" (equivalen a "sin filtro").
+function toQueryString(filters: Record<string, unknown> | undefined): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters || {})) {
+    if (value !== null && value !== undefined && value !== "" && value !== "all") params.set(key, String(value));
+  }
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
 }
 
-export async function getAprobacionGerencia(_session: FrontendSession): Promise<AprobacionQueue> {
-  return financialbiFetchJson<AprobacionQueue>("/v1/financialbi/hidrocarburos/aprobacion/gerencia");
+export async function getAprobacionCompras(_session: FrontendSession, filtros?: AprobacionSearch): Promise<AprobacionQueue> {
+  return financialbiFetchJson<AprobacionQueue>(`/v1/financialbi/hidrocarburos/aprobacion/compras${toQueryString(filtros)}`);
 }
 
-export async function getAprobacionHistorial(_session: FrontendSession): Promise<AprobacionQueue> {
-  return financialbiFetchJson<AprobacionQueue>("/v1/financialbi/hidrocarburos/aprobacion/historial");
+export async function getAprobacionGerencia(_session: FrontendSession, filtros?: AprobacionSearch): Promise<AprobacionQueue> {
+  return financialbiFetchJson<AprobacionQueue>(`/v1/financialbi/hidrocarburos/aprobacion/gerencia${toQueryString(filtros)}`);
+}
+
+export async function getAprobacionHistorial(_session: FrontendSession, filtros?: AprobacionSearch): Promise<AprobacionQueue> {
+  return financialbiFetchJson<AprobacionQueue>(`/v1/financialbi/hidrocarburos/aprobacion/historial${toQueryString(filtros)}`);
 }
 
 export async function getAprobacionCatalogCeco(_session: FrontendSession): Promise<AprobacionCatalog> {
@@ -157,6 +168,6 @@ export async function getAprobacionCatalogSitios(_session: FrontendSession): Pro
   return financialbiFetchJson<AprobacionCatalog>("/v1/financialbi/hidrocarburos/aprobacion/catalogo/sitios");
 }
 
-export async function getDashboard(_session: FrontendSession): Promise<DashboardData> {
-  return financialbiFetchJson<DashboardData>("/v1/financialbi/hidrocarburos/dashboard");
+export async function getDashboard(_session: FrontendSession, filtros?: Record<string, unknown>): Promise<DashboardData> {
+  return financialbiFetchJson<DashboardData>(`/v1/financialbi/hidrocarburos/dashboard${toQueryString(filtros)}`);
 }

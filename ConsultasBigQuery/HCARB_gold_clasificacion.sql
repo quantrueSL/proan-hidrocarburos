@@ -37,6 +37,13 @@
 -- El predicado de gas se calcula una sola vez (es_linea_gas en cfdis_flagged) en vez de
 -- repetirlo en cada agregado.
 
+-- D31 (jul-2026): cutoff de fecha de negocio >=2026-01-01. proan_MSEG_HIDROCARBUROS_20260714
+-- solo cubre MJAHR=2026 (Fase 1 §15), pero cfdis no tenía piso de fecha y arrancaba
+-- ~jun-2025 (Fase 1 §19.5) -- ~7 meses que MSEG nunca podrá validar porque el dato no existe
+-- en SAP para ese rango. Se corta aquí (único punto, todo lo demás hereda vía JOIN/lectura
+-- de esta tabla) exigiendo FechaTimbrado Y Fecha >= el cutoff, no solo uno de los dos.
+DECLARE cutoff_fecha_negocio DATE DEFAULT '2026-01-01';
+
 CREATE OR REPLACE TABLE `proan-quantrue.D60_REPORTING.HCARB_GOLD_CLASIFICACION_FOLIO` AS
 WITH cfdis_dedup AS (
   SELECT * EXCEPT(rn)
@@ -48,6 +55,8 @@ WITH cfdis_dedup AS (
       ) AS rn
     FROM `proan-quantrue.D00_SANDBOX.cfdis`
     WHERE ReceptorRfc = 'PAN921013AK7'
+      AND DATE(FechaTimbrado) >= cutoff_fecha_negocio
+      AND DATE(Fecha) >= cutoff_fecha_negocio
   )
   WHERE rn = 1
 ),
@@ -85,6 +94,12 @@ SELECT
   COUNT(*) AS n_lineas_total,
   -- Claves SAT distintas que clasificaron la factura como gas (para badge/filtro).
   ARRAY_AGG(DISTINCT IF(c.es_linea_gas, c.ClaveProdServ, NULL) IGNORE NULLS) AS claves_gas,
+  -- Material/cantidad "principal" (jul-2026, para columnas de M1): de la línea de gas de
+  -- mayor importe -- en la práctica casi siempre hay una sola línea de gas por factura
+  -- (README: 1.035+18+3=1.056), así que esto ya cubre la inmensa mayoría sin ambigüedad.
+  ARRAY_AGG(IF(c.es_linea_gas, c.Descripcion, NULL) IGNORE NULLS ORDER BY c.Importe DESC LIMIT 1)[SAFE_OFFSET(0)] AS material_principal,
+  ARRAY_AGG(IF(c.es_linea_gas, c.Cantidad, NULL) IGNORE NULLS ORDER BY c.Importe DESC LIMIT 1)[SAFE_OFFSET(0)] AS cantidad_principal,
+  ARRAY_AGG(IF(c.es_linea_gas, c.ClaveUnidad, NULL) IGNORE NULLS ORDER BY c.Importe DESC LIMIT 1)[SAFE_OFFSET(0)] AS clave_unidad_principal,
   -- Líneas de gas con su clave + descripción + cantidad/unidad/importe (evidencia de por qué
   -- la factura es gas). Grano línea anidado dentro de la factura, ordenado por importe desc.
   ARRAY_AGG(

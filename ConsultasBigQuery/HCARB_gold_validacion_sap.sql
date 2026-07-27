@@ -20,7 +20,8 @@
 --    diario (2026-07-22) -- el desfase de ~2 semanas es tolerable para un flag.
 --
 -- Sitio de consumo vía sap_ekbe -> pedido -> WERKS (misma lógica exacto/numérico, ~58%, D21).
--- Corroboración MSEG real (2% con recepción de gas material) como señal extra, no principal.
+-- Corroboración MSEG real: 505/1056 (48%) con confianza_mseg Alta/Media -- ver bloque (3) y
+-- el fix de jul-2026 más abajo (subió del 2% original, que era un bug de filtro, no un techo).
 -- sin_match_sap NO bloquea aprobación -- flag de revisión suave (D18), se re-evalúa cada corrida.
 --
 -- EJECUTADO jul-2026. Bugs reales encontrados y corregidos al ejecutar (ninguno se veía
@@ -38,6 +39,27 @@
 --   (Esquema.md lo advertía), así que sin el filtro de dm_material coincidían recepciones
 --   de diésel/insecticida/detergente que comparten folio con la factura de gas (inflaba
 --   tiene_recepcion_mseg a 505/1051 en vez de ~21). Añadido el filtro de queries/102-103.
+--   [SUPERADO, ver fix de jul-2026 más abajo: ese "~21 real" resultó ser el bug, no el hallazgo].
+--
+-- FIX jul-2026 (Fase-1-bis-2): el filtro `MATNR IN (6 materiales de dm_material)` descartaba
+-- las recepciones que SAP contabiliza por cuenta contable directa sin material (MATNR vacío,
+-- SAKTO='0005010611') -- que es el patrón DOMINANTE incluso para el único proveedor que sí
+-- tenía MATNR poblado (Gas Noel: 4.991 filas por cuenta vs 52 por material). Cambiado el
+-- filtro de "MATNR de la lista de gas" a "LIFNR = uno de los 11 proveedores de gas ya
+-- identificados" (HCARB_STG_VENDORS) -- sube tiene_recepcion_mseg de 21 (2%) a 505 (48%).
+-- Confirmado que XBLNR_MKPF/BUDAT_MKPF son de cabecera (0 documentos con >1 folio o fecha
+-- distintos), así que se agrega DMBTR/ERFMG por MBLNR/MJAHR antes de comparar contra la
+-- factura -- de paso resuelve la simplificación de ANY_VALUE que quedaba pendiente (abajo).
+-- Score con fallback numérico (mismo patrón D18 de BKPF/EKBE): SÍ aporta aquí, a diferencia
+-- de lo que parecía en un primer diagnóstico -- recupera casos con prefijo de folio distinto
+-- (ej. "F6144731" en MSEG vs "CFDI6144731" en la factura), confirmados con importe exacto al
+-- centavo. Auditoría (ZZ_PRUEBAS.hcarb_mseg_scored_try): 0 UUIDs/documentos duplicados, 0
+-- colisiones de folio por proveedor. De los 451 matches con folio pero SIN importe exacto, el
+-- importe MSEG es mayor al de la factura en 99% de los casos (signo consistente, no ruido) --
+-- el documento SAP suele ser una recepción consolidada de varias entregas, así que el folio
+-- prueba "hubo recepción asociada" pero el importe no reconcilia el monto de ESTA factura.
+-- Por eso `confianza_mseg='Alta'` exige folio Y importe exacto (54 casos); el resto con folio
+-- (exacto o numérico) queda en 'Media' (451 casos) -- evidencia de recepción, no de monto.
 --
 -- Descartado en Fase-1-bis para CECO (no se pudo derivar, sigue siendo captura manual):
 -- ACDOCA está acotado a RBUKRS='ETC' (no las sociedades del gas); 0FI_GL_14 congelado en
@@ -45,13 +67,10 @@
 -- de INGESTA, no de modelo. La dirección física de planta SÍ existe en T001W y se expone
 -- ahora como `direccion_sitio` (la "Dirección de Consumo" de la Propuesta, para el WERKS
 -- resuelto ~58%).
---
--- Simplificación que queda sin resolver (menor impacto, no bloquea): mseg_match usa
--- ANY_VALUE si una factura casa con varias líneas MSEG -- no suma cantidades/importes.
 
 CREATE OR REPLACE TABLE `proan-quantrue.D60_REPORTING.HCARB_GOLD_VALIDACION_SAP` AS
 WITH folios AS (
-  SELECT uuid, folio_key, folio_numero, fecha_timbrado, fecha,
+  SELECT uuid, folio_key, folio_numero, fecha_timbrado, fecha, importe_gas,
          LTRIM(TRIM(id_proveedor), '0') AS proveedor_key
   FROM `proan-quantrue.D60_REPORTING.HCARB_GOLD_CLASIFICACION_FOLIO`
 ),
@@ -172,16 +191,18 @@ sitio_match AS (
   SELECT * FROM sitio_numerico
 ),
 
--- (3) Corroboración MSEG real (2% con recepción de gas) ---------------------------------
+-- (3) Corroboración MSEG real -------------------------------------------------------------
 -- El extracto proan_MSEG_HIDROCARBUROS_20260714 viene pre-filtrado por un criterio
 -- demasiado amplio (external_material_group LIKE '151115%' OR ERFME IN ('L','M3') --
--- mezcla diésel/insecticida/detergente, Esquema.md). Hay que acotar de verdad por los
--- materiales de gas reales (dm_material.external_material_group LIKE '151115%',
--- Fase 1 queries/102-103), si no cualquier receta liquida con el mismo folio cuela.
-gas_material AS (
-  SELECT material_number
-  FROM `proan-quantrue.D20_DIMENSION.dm_material`
-  WHERE external_material_group LIKE '151115%'
+-- mezcla diésel/insecticida/detergente, Esquema.md). El filtro que se probó primero
+-- (MATNR en el catálogo de 6 materiales de gas de dm_material) también descartaba de más:
+-- la mayoría de las recepciones de estos proveedores se contabilizan por cuenta contable
+-- directa, sin material (MATNR vacío, SAKTO='0005010611') -- ver header del archivo. El
+-- filtro correcto es por proveedor: como estos 11 proveedores son distribuidoras de gas
+-- dedicadas (no venden diésel/insecticida a Proan), acotar por LIFNR ya resuelve la
+-- contaminación de material sin perder las recepciones sin MATNR.
+gas_vendor_keys AS (
+  SELECT DISTINCT proveedor_key FROM folios
 ),
 mseg_dedup AS (
   SELECT * EXCEPT(rn)
@@ -191,17 +212,104 @@ mseg_dedup AS (
     WHERE BWART != '102'
   )
   WHERE rn = 1
-    AND MATNR IN (SELECT material_number FROM gas_material)
+    AND LTRIM(TRIM(LIFNR), '0') IN (SELECT proveedor_key FROM gas_vendor_keys)
 ),
+-- Documento = grano real de una recepción SAP. XBLNR_MKPF/BUDAT_MKPF son de cabecera
+-- (confirmado: 0 documentos con más de un folio o fecha distintos entre sus líneas), así
+-- que se agregan las líneas de cada MBLNR antes de comparar contra la factura.
+mseg_doc AS (
+  SELECT
+    MBLNR, MJAHR,
+    ANY_VALUE(LTRIM(TRIM(LIFNR), '0')) AS proveedor_key,
+    ANY_VALUE(UPPER(REPLACE(TRIM(XBLNR_MKPF), ' ', ''))) AS folio_key_mseg,
+    ANY_VALUE(LTRIM(REGEXP_REPLACE(TRIM(XBLNR_MKPF), r'[^0-9]', ''), '0')) AS folio_numero_mseg,
+    ANY_VALUE(SAFE.PARSE_DATE('%Y%m%d', CAST(BUDAT_MKPF AS STRING))) AS fecha_mseg,
+    SUM(DMBTR) AS doc_importe,
+    SUM(ERFMG) AS doc_cantidad
+  FROM mseg_dedup
+  GROUP BY MBLNR, MJAHR
+),
+-- Score por documento-candidato (mismo patrón que match_sap_numerico/sitio_numerico):
+-- folio exacto=4, folio numérico-fallback=3 (rescata prefijo distinto, ej. "F"/"CFDI"),
+-- importe exacto (2 decimales)=3, importe relajado (1 decimal)=1. Ventana ±120 días --
+-- verificado que hacen falta: hay matches reales (folio+importe exactos) hasta 92 días
+-- de diferencia entre la fecha de la factura y la fecha en que SAP registra la recepción.
+mseg_scored AS (
+  SELECT
+    f.uuid, m.MBLNR, m.MJAHR, m.doc_importe, m.doc_cantidad,
+    (
+      CASE WHEN m.folio_key_mseg = f.folio_key THEN 4
+           WHEN LENGTH(f.folio_numero) >= 5 AND m.folio_numero_mseg = f.folio_numero THEN 3
+           ELSE 0 END
+      + CASE WHEN ROUND(m.doc_importe, 2) = ROUND(f.importe_gas, 2) THEN 3
+             WHEN ROUND(m.doc_importe, 1) = ROUND(f.importe_gas, 1) THEN 1
+             ELSE 0 END
+    ) AS score,
+    (m.folio_key_mseg = f.folio_key
+     OR (LENGTH(f.folio_numero) >= 5 AND m.folio_numero_mseg = f.folio_numero)) AS match_folio,
+    (ROUND(m.doc_importe, 2) = ROUND(f.importe_gas, 2)) AS match_importe,
+    ABS(DATE_DIFF(DATE(f.fecha), m.fecha_mseg, DAY)) AS dias_diferencia
+  FROM folios f
+  JOIN mseg_doc m
+    ON m.proveedor_key = f.proveedor_key
+    AND ABS(DATE_DIFF(DATE(f.fecha), m.fecha_mseg, DAY)) <= 120
+),
+-- Mejor match mutuo (un documento no puede corroborar 2 facturas ni viceversa), igual que
+-- best_match en Primera-iteracion/hidrocarburos.sql. confianza_mseg='Alta' solo si folio Y
+-- importe casan exacto (recepción 1:1 verificable); 'Media' si solo el folio casa -- el
+-- importe de MSEG en esos casos suele ser mayor al de la factura (recepción consolidada de
+-- varias entregas/facturas bajo un mismo documento), así que confirma "hubo recepción" pero
+-- no sirve para reconciliar el monto de esta factura en particular.
 mseg_match AS (
   SELECT
-    f.uuid,
-    ANY_VALUE(m.DMBTR) AS mseg_importe,
-    ANY_VALUE(m.ERFMG) AS mseg_cantidad,
-    SAFE_DIVIDE(ANY_VALUE(m.DMBTR), ANY_VALUE(m.ERFMG)) AS mseg_valor_unitario
-  FROM folios f
-  JOIN mseg_dedup m ON UPPER(REPLACE(TRIM(m.XBLNR_MKPF), ' ', '')) = f.folio_key
-  GROUP BY f.uuid
+    uuid, MBLNR, MJAHR,
+    doc_importe AS mseg_importe,
+    doc_cantidad AS mseg_cantidad,
+    SAFE_DIVIDE(doc_importe, doc_cantidad) AS mseg_valor_unitario,
+    IF(match_folio AND match_importe, 'Alta', 'Media') AS confianza_mseg
+  FROM (
+    SELECT *,
+      ROW_NUMBER() OVER (PARTITION BY MBLNR ORDER BY score DESC, dias_diferencia ASC) AS rn_mseg,
+      ROW_NUMBER() OVER (PARTITION BY uuid ORDER BY score DESC, dias_diferencia ASC) AS rn_cfdi
+    FROM mseg_scored
+    WHERE score >= 2
+  )
+  WHERE rn_mseg = 1 AND rn_cfdi = 1
+),
+
+-- CECO sugerido (jul-2026, D22 pendiente de revisión con negocio -- esto NO bloquea,
+-- solo prellena un campo que sigue editable, mismo criterio que D29):
+-- (a) Proveedores de un solo sitio real (5-6 de 11: Villa Ahumada, Natgas Querétaro,
+--     Hidrogas Chihuahua, Gas San Juan, San Diego Matehuala, Super Gas de los Altos --
+--     ≥95% de su importe MSEG histórico cae en un único KOSTL) -- se sugiere ESE KOSTL
+--     a TODAS sus facturas, aunque esta factura en concreto no haya casado ningún
+--     documento (188 facturas). Los otros proveedores (Gas Noel, Corpo Gas, Energas de
+--     México) reparten entre 10-61 KOSTL distintos sin que ninguno domine -- no aplica.
+ceco_por_proveedor AS (
+  SELECT proveedor_key, kostl AS ceco_proveedor
+  FROM (
+    SELECT proveedor_key, kostl,
+      SAFE_DIVIDE(importe, SUM(importe) OVER (PARTITION BY proveedor_key)) AS concentracion,
+      ROW_NUMBER() OVER (PARTITION BY proveedor_key ORDER BY importe DESC) AS rn
+    FROM (
+      SELECT LTRIM(TRIM(LIFNR), '0') AS proveedor_key, NULLIF(TRIM(KOSTL), '') AS kostl, SUM(DMBTR) AS importe
+      FROM mseg_dedup
+      GROUP BY proveedor_key, kostl
+    )
+    WHERE kostl IS NOT NULL
+  )
+  WHERE rn = 1 AND concentracion >= 0.95
+),
+-- (b) Para el resto: los KOSTL que trae el documento MSEG que casó esta factura en
+--     concreto. Casi nunca hay uno solo dominante en documentos multi-sitio (verificado:
+--     de 251 facturas con documento multi-KOSTL, ninguna combinación de tamaño supera el
+--     ~60% de concentración típica) -- se listan TODOS, no se adivina uno.
+ceco_por_documento AS (
+  SELECT MBLNR, MJAHR,
+    STRING_AGG(DISTINCT NULLIF(TRIM(KOSTL), ''), ', ' ORDER BY NULLIF(TRIM(KOSTL), '')) AS cecos_documento,
+    COUNT(DISTINCT NULLIF(TRIM(KOSTL), '')) AS n_cecos_documento
+  FROM mseg_dedup
+  GROUP BY MBLNR, MJAHR
 ),
 
 -- (4) Dirección física de la planta (Fase-1-bis): T001W tiene la dirección postal por WERKS
@@ -245,14 +353,30 @@ SELECT
   td.direccion_sitio,
   st.tipo_match_sitio,
   -- Corroboración MSEG.
-  (mm.uuid IS NOT NULL) AS tiene_recepcion_mseg,
+  mm.confianza_mseg,
   mm.mseg_cantidad,
   mm.mseg_valor_unitario,
-  mm.mseg_importe
+  mm.mseg_importe,
+  -- CECO sugerido: patrón de proveedor de un solo sitio si existe, si no los KOSTL del
+  -- documento MSEG que casó (uno o varios, separados por coma). NULL si nada aplica --
+  -- el campo sigue 100% editable en la UI, esto solo prellena (D22 pendiente de revisar).
+  COALESCE(cpp.ceco_proveedor, cd.cecos_documento) AS ceco_sugerido,
+  -- Origen de la sugerencia (jul-2026, para explicarla en la UI, no solo mostrarla):
+  -- 'proveedor' = proveedor de un solo sitio (aplica a TODAS sus facturas, con o sin match);
+  -- 'documento' = un único KOSTL en el documento MSEG que casó esta factura;
+  -- 'documento_multiple' = el documento reparte el gasto entre varios KOSTL, hay que elegir.
+  CASE
+    WHEN cpp.ceco_proveedor IS NOT NULL THEN 'proveedor'
+    WHEN cd.n_cecos_documento = 1 THEN 'documento'
+    WHEN cd.n_cecos_documento > 1 THEN 'documento_multiple'
+    ELSE NULL
+  END AS ceco_sugerido_origen
 FROM folios f
 LEFT JOIN sap_match s ON f.uuid = s.uuid
 LEFT JOIN match_proveedor p ON f.uuid = p.uuid
 LEFT JOIN sitio_match st ON f.uuid = st.uuid
 LEFT JOIN `proan-quantrue.D20_DIMENSION.dm_centros` ce ON st.werks = ce.id_centro
 LEFT JOIN sitio_direccion td ON st.werks = td.werks
-LEFT JOIN mseg_match mm ON f.uuid = mm.uuid;
+LEFT JOIN mseg_match mm ON f.uuid = mm.uuid
+LEFT JOIN ceco_por_proveedor cpp ON cpp.proveedor_key = f.proveedor_key
+LEFT JOIN ceco_por_documento cd ON cd.MBLNR = mm.MBLNR AND cd.MJAHR = mm.MJAHR;

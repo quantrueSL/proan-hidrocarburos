@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel, Field
 # NOTA: pymssql (backend Azure SQL) se importa de forma perezosa dentro de
 # db.py solo cuando FINANCIALBI_DB_BACKEND=azure. En Hidrocarburos el backend
@@ -45,16 +45,50 @@ def _startup() -> None:
 
 
 class HydrocarburosFilters(BaseModel):
+    busqueda: str | None = None
     fecha_desde: date | None = None
     fecha_hasta: date | None = None
     proveedor_id: str | None = None
     estado_sap: Literal["validada_sap", "sin_match_sap"] | None = None
     sitio: Literal["all", "with_site", "without_site"] = "all"
+    clave_sat: str | None = None
+    clasificacion: Literal["all", "gas", "mixta"] = "all"
 
 
 class HydrocarburosSearch(HydrocarburosFilters):
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=50, ge=1, le=100)
+
+
+# Mismos filtros que HydrocarburosFilters (M1) + confianza_mseg -- las colas de
+# aprobación (M2/M3) leen de la misma tabla de origen, así que tiene sentido
+# poder filtrar por lo mismo. Query params en un GET (Depends()), no body de POST.
+class AprobacionFiltros(BaseModel):
+    busqueda: str | None = None
+    fecha_desde: date | None = None
+    fecha_hasta: date | None = None
+    proveedor_id: str | None = None
+    estado_sap: Literal["validada_sap", "sin_match_sap"] | None = None
+    confianza_mseg: Literal["Alta", "Media", "sin_evidencia"] | None = None
+    sitio: Literal["all", "with_site", "without_site"] = "all"
+
+
+class AprobacionSearch(AprobacionFiltros):
+    page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=50, ge=1, le=100)
+
+
+# Filtros del dashboard: mismas dimensiones que AprobacionFiltros + estatus_sat
+# (D24 -- el dashboard es el único lugar que resume cancelación SAT, las colas
+# de aprobación no lo filtran). "sin_confirmar" agrupa "nunca consultado" y
+# "no_encontrado", igual que el bucket sin_confirmar_sat del resumen.
+class DashboardFiltros(BaseModel):
+    fecha_desde: date | None = None
+    fecha_hasta: date | None = None
+    proveedor_id: str | None = None
+    estado_sap: Literal["validada_sap", "sin_match_sap"] | None = None
+    confianza_mseg: Literal["Alta", "Media", "sin_evidencia"] | None = None
+    estatus_sat: Literal["vigente", "cancelado", "sin_confirmar"] | None = None
 
 
 class CapturarCompraBody(BaseModel):
@@ -170,31 +204,31 @@ def _raise_if_not_ok(result: dict[str, Any]) -> None:
 
 
 @app.get("/v1/financialbi/hidrocarburos/aprobacion/compras")
-def financial_aprobacion_cola_compras() -> dict[str, Any]:
+def financial_aprobacion_cola_compras(filtros: AprobacionSearch = Depends()) -> dict[str, Any]:
     try:
-        return {"rows": _to_jsonable(cola_compras())}
+        return _to_jsonable(cola_compras(**filtros.model_dump()))
     except Exception as exc:
         log.exception("aprobacion cola compras error")
         raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.get("/v1/financialbi/hidrocarburos/aprobacion/gerencia")
-def financial_aprobacion_cola_gerencia() -> dict[str, Any]:
+def financial_aprobacion_cola_gerencia(filtros: AprobacionSearch = Depends()) -> dict[str, Any]:
     try:
-        return {"rows": _to_jsonable(cola_gerencia())}
+        return _to_jsonable(cola_gerencia(**filtros.model_dump()))
     except Exception as exc:
         log.exception("aprobacion cola gerencia error")
         raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.get("/v1/financialbi/hidrocarburos/aprobacion/historial")
-def financial_aprobacion_historial() -> dict[str, Any]:
+def financial_aprobacion_historial(filtros: AprobacionSearch = Depends()) -> dict[str, Any]:
     """Facturas ya avanzadas más allá de la bandeja inicial de Compras
     (pendientes de Gerencia, aprobadas, rechazadas) -- necesario para poder
     reeditar antes de decidir o reabrir después, ver reversibilidad en
     Datos/PHASE2/Esquema.md §4."""
     try:
-        return {"rows": _to_jsonable(aprobacion_historial())}
+        return _to_jsonable(aprobacion_historial(**filtros.model_dump()))
     except Exception as exc:
         log.exception("aprobacion historial error")
         raise HTTPException(status_code=500, detail=str(exc))
@@ -289,9 +323,9 @@ def financial_aprobacion_reabrir(uuid: str, body: ReabrirBody) -> dict[str, Any]
 # --- Dashboard (Propuesta.md §3) ---------------------------------------------
 
 @app.get("/v1/financialbi/hidrocarburos/dashboard")
-def financial_dashboard() -> dict[str, Any]:
+def financial_dashboard(filtros: DashboardFiltros = Depends()) -> dict[str, Any]:
     try:
-        return _to_jsonable(dashboard_resumen_completo())
+        return _to_jsonable(dashboard_resumen_completo(**filtros.model_dump()))
     except Exception as exc:
         log.exception("dashboard error")
         raise HTTPException(status_code=500, detail=str(exc))

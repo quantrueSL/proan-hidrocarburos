@@ -37,10 +37,10 @@ export interface ClientConfig {
 export const clientConfig: ClientConfig = {
   defaultAuthenticatedRoute: "/hidrocarburos",
   branding: {
-    productName: "FinancialAI",
-    metadataTitle: "FinancialAI",
-    metadataDescription: "Frontend React de FinancialAI para Proan.",
-    loginTitle: "FinancialAI",
+    productName: "Hidrocarburos",
+    metadataTitle: "Hidrocarburos",
+    metadataDescription: "Frontend React de Hidrocarburos para Proan.",
+    loginTitle: "Hidrocarburos",
   },
   features: {
     hydrocarburos: { enabled: true },

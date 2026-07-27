@@ -32,15 +32,16 @@ revisión y control sobre datos que ya existen en BigQuery.
 **Alcance actual (provisional, pendiente de ratificar con negocio):** solo
 facturas recibidas por Proteína Animal (`PAN921013AK7`) con clave SAT de gas
 (propano, natural, GNL, GNC, butano — `151115xx`) o servicio de GNC
-(`83101600`/`83101601`). Diésel y gasolina quedan fuera. ~1.051 facturas,
-~$40M, 11 proveedores, sobre el histórico cargado hasta la fecha.
+(`83101600`/`83101601`), **desde 2026-01-01** (D31 — alineado con la cobertura
+real de SAP/MSEG, que solo tiene datos de 2026). Diésel y gasolina quedan
+fuera. ~547 facturas, ~$25.9M, 11 proveedores.
 
 ### Módulos
 
 | Módulo | Qué hace | Estado |
 | --- | --- | --- |
 | **M1 — Clasificación** | Filtra las facturas de gas del CFDI, marca las mixtas (factura con gas + otros conceptos) y calcula el importe de gas por factura (nunca el total de la factura, que puede incluir otras cosas). | ✅ Construido |
-| **M2 — Validación SAP** (automática) | Comprueba si la factura quedó registrada en la contabilidad de SAP (~85% lo está) y, cuando es posible, deriva la planta de consumo a partir del pedido de compra (~54-58% de los casos). No bloquea nada — es información de contexto. | ✅ Construido |
+| **M2 — Validación SAP** (automática) | Comprueba si la factura quedó registrada en la contabilidad de SAP (~91% lo está) y, cuando es posible, deriva la planta de consumo a partir del pedido de compra (~70% de los casos). No bloquea nada — es información de contexto. | ✅ Construido |
 | **M3 — Aprobación** | Flujo de dos pasos humanos: **Compras** revisa la factura, indica el centro de costos (CECO, siempre manual) y confirma/corrige la planta de consumo si M2 no la dedujo; **Gerencia** ve la factura ya revisada por Compras y la aprueba o rechaza. Reversible: se puede corregir o "reabrir" una decisión. | ✅ Construido |
 | **M4 — Pago** | Marcar la factura como pagada una vez SAP procese el pago. | ⏸️ Aparcado — no existe hoy una fuente de datos fiable del estatus de pago por proveedor |
 | **Estatus SAT** | Comprueba si el CFDI sigue vigente o fue cancelado ante el SAT (webservice público). | ✅ Construido — corre a mano (`python -m financialbi.estatus_sat`) hasta que exista el DAG de Airflow |
@@ -68,7 +69,7 @@ facturas recibidas por Proteína Animal (`PAN921013AK7`) con clave SAT de gas
 
 - El **CECO siempre se captura a mano** — no existe en ninguna tabla de SAP
   disponible la imputación de centro de costos por factura de gas.
-- La **planta de consumo** solo se deduce automáticamente para ~54-58% de las
+- La **planta de consumo** solo se deduce automáticamente para ~70% de las
   facturas (el resto no tiene rastro de pedido con recepción en SAP) — el
   resto se captura a mano en M3.
 - **No hay dirección postal/geográfica** de las plantas, solo el nombre de la

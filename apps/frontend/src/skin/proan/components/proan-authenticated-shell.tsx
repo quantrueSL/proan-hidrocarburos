@@ -29,15 +29,6 @@ type NavItem = {
   label: string;
 };
 
-function BookIcon() {
-  return (
-    <svg fill="none" viewBox="0 0 24 24">
-      <path d="M3 5h6a4 4 0 0 1 4 4v10a3 3 0 0 0-3-3H3Z" />
-      <path d="M21 5h-6a4 4 0 0 0-4 4v10a3 3 0 0 1 3-3h7Z" />
-    </svg>
-  );
-}
-
 function UserIcon() {
   return (
     <svg fill="none" viewBox="0 0 24 24">
@@ -72,20 +63,18 @@ export function ProanAuthenticatedShell({
 }: ProanAuthenticatedShellProps) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNavOpen, setIsNavOpen] = useState(false);
-  const [isDictionaryOpen, setIsDictionaryOpen] = useState(false);
   const pathname = usePathname();
 
   useEffect(() => {
     setIsNavOpen(false);
-    setIsDictionaryOpen(false);
   }, [pathname]);
 
   const homeHref = getHomeHref(features);
   const navItems: NavItem[] = features.hydrocarburos.enabled
     ? [
-        { href: "/hidrocarburos", key: "hydrocarburos-m1", label: "M1 · Clasificación" },
-        { href: "/compras", key: "compras", label: "M2 · Compras" },
-        { href: "/aprobacion", key: "gerencia", label: "M3 · Aprobación" },
+        { href: "/hidrocarburos", key: "hydrocarburos-m1", label: "Clasificación" },
+        { href: "/compras", key: "compras", label: "Compras" },
+        { href: "/aprobacion", key: "gerencia", label: "Aprobación" },
         { href: "/dashboard", key: "dashboard", label: "Dashboard" }
       ]
     : [];
@@ -100,7 +89,7 @@ export function ProanAuthenticatedShell({
         <header className="app-topbar proan-topbar">
           <button
             aria-expanded={isNavOpen}
-            aria-label="Abrir navegacion"
+            aria-label={isNavOpen ? "Cerrar navegación" : "Abrir navegación"}
             className={`topbar-menu-toggle${isNavOpen ? " is-open" : ""}`}
             onClick={() => setIsNavOpen((current) => !current)}
             type="button"
@@ -130,45 +119,16 @@ export function ProanAuthenticatedShell({
                 href={item.href}
                 key={item.key}
                 onClick={() => setIsNavOpen(false)}
+                prefetch={false}
               >
                 {item.label}
               </Link>
             ))}
 
-            <div className="topbar-dictionary">
-              <button
-                aria-expanded={isDictionaryOpen}
-                aria-haspopup="menu"
-                aria-label="Diccionario"
-                className="topbar-nav-action topbar-nav-action-icon"
-                onClick={() => setIsDictionaryOpen((current) => !current)}
-                type="button"
-              >
-                <span aria-hidden="true" className="topbar-nav-icon">
-                  <BookIcon />
-                </span>
-              </button>
-
-              {isDictionaryOpen ? (
-                <div className="topbar-dictionary-panel" role="menu">
-                  <button
-                    aria-pressed="true"
-                    className="topbar-dictionary-option is-selected"
-                    role="menuitemradio"
-                    type="button"
-                  >
-                    <span>Espanol</span>
-                    <span className="topbar-dictionary-check">✓</span>
-                  </button>
-                </div>
-              ) : null}
-            </div>
-
             <button
               aria-label="Mi perfil"
               className="topbar-nav-action topbar-nav-action-icon"
               onClick={() => {
-                setIsDictionaryOpen(false);
                 setIsProfileOpen(true);
               }}
               type="button"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from typing import Any, Literal
 
@@ -15,6 +16,7 @@ _VENDORS = "`proan-quantrue.D50_AGGREGATE_RENTABILIDAD.HCARB_STG_VENDORS`"
 
 SiteStatus = Literal["all", "with_site", "without_site"]
 SapStatus = Literal["validada_sap", "sin_match_sap"]
+Clasificacion = Literal["all", "gas", "mixta"]
 
 
 def _base_query() -> str:
@@ -27,14 +29,29 @@ def _base_query() -> str:
 
 def _filters(
     *,
+    busqueda: str | None = None,
     fecha_desde: date | None = None,
     fecha_hasta: date | None = None,
     proveedor_id: str | None = None,
     estado_sap: SapStatus | None = None,
     sitio: SiteStatus = "all",
+    clave_sat: str | None = None,
+    clasificacion: Clasificacion = "all",
 ) -> tuple[str, list[bigquery.ScalarQueryParameter]]:
     clauses = ["TRUE"]
     params: list[bigquery.ScalarQueryParameter] = []
+    if busqueda and busqueda.strip():
+        clauses.append(
+            """LOWER(CONCAT(
+              COALESCE(f.serie, ''), COALESCE(CAST(f.folio AS STRING), ''), ' ',
+              COALESCE(f.folio_key, ''), ' ',
+              COALESCE(CAST(f.folio AS STRING), ''), ' ',
+              COALESCE(f.uuid, ''), ' ',
+              COALESCE(v.razon_social, f.emisor_rfc, ''), ' ',
+              COALESCE(f.material_principal, '')
+            )) LIKE CONCAT('%', LOWER(@busqueda), '%')"""
+        )
+        params.append(bigquery.ScalarQueryParameter("busqueda", "STRING", busqueda.strip()))
     if fecha_desde:
         clauses.append("DATE(f.fecha) >= @fecha_desde")
         params.append(bigquery.ScalarQueryParameter("fecha_desde", "DATE", fecha_desde))
@@ -51,6 +68,13 @@ def _filters(
         clauses.append("s.werks IS NOT NULL")
     elif sitio == "without_site":
         clauses.append("s.werks IS NULL")
+    if clave_sat:
+        clauses.append("@clave_sat IN UNNEST(f.claves_gas)")
+        params.append(bigquery.ScalarQueryParameter("clave_sat", "STRING", clave_sat))
+    if clasificacion == "gas":
+        clauses.append("f.es_mixta IS FALSE")
+    elif clasificacion == "mixta":
+        clauses.append("f.es_mixta IS TRUE")
     return " AND ".join(clauses), params
 
 
@@ -83,11 +107,19 @@ def catalog() -> dict[str, Any]:
           SELECT AS STRUCT werks AS id, sitio_consumo AS nombre
           FROM (SELECT DISTINCT werks, sitio_consumo FROM base WHERE werks IS NOT NULL)
           ORDER BY nombre
-        ) AS sitios
+        ) AS sitios,
+        ARRAY(
+          SELECT DISTINCT clave FROM {_FOLIO}, UNNEST(claves_gas) AS clave ORDER BY clave
+        ) AS claves_sat
       FROM base
     """
     rows = _rows(query, [])
-    return rows[0] if rows else {"fecha_minima": None, "fecha_maxima": None, "proveedores": [], "sitios": []}
+    payload = rows[0] if rows else {"fecha_minima": None, "fecha_maxima": None, "proveedores": [], "sitios": [], "claves_sat": []}
+    try:
+        payload["ultima_actualizacion"] = _get_bq_client().get_table(_FOLIO.strip("`")).modified
+    except Exception:
+        payload["ultima_actualizacion"] = None
+    return payload
 
 
 def summary(**filters: Any) -> dict[str, Any]:
@@ -99,7 +131,7 @@ def summary(**filters: Any) -> dict[str, Any]:
         COUNTIF(f.es_mixta) AS facturas_mixtas,
         COUNTIF(s.estado_sap = 'validada_sap') AS validadas_sap,
         COUNTIF(s.werks IS NOT NULL) AS con_sitio,
-        COUNTIF(s.tiene_recepcion_mseg) AS con_recepcion_mseg
+        COUNTIF(s.confianza_mseg IS NOT NULL) AS con_recepcion_mseg
       {_base_query()}
       WHERE {where}
     """
@@ -118,7 +150,9 @@ def search(*, page: int, page_size: int, **filters: Any) -> dict[str, Any]:
         f.uuid, DATE(f.fecha) AS fecha, f.serie, CAST(f.folio AS STRING) AS folio,
         f.id_proveedor, COALESCE(v.razon_social, f.emisor_rfc) AS proveedor,
         f.importe_gas, f.es_mixta, f.claves_gas, s.estado_sap, s.werks, s.sitio_consumo,
-        s.tiene_recepcion_mseg
+        s.confianza_mseg,
+        f.material_principal AS material, f.cantidad_principal AS cantidad,
+        f.clave_unidad_principal AS clave_unidad
       {_base_query()}
       WHERE {where}
       ORDER BY fecha DESC, f.uuid
@@ -126,8 +160,12 @@ def search(*, page: int, page_size: int, **filters: Any) -> dict[str, Any]:
     """
     count_query = f"SELECT COUNT(*) AS total {_base_query()} WHERE {where}"
     count_params = params[:-2]
-    total_rows = _rows(count_query, count_params)
-    return {"total": total_rows[0]["total"] if total_rows else 0, "page": page, "page_size": page_size, "rows": _rows(query, params)}
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        total_future = executor.submit(_rows, count_query, count_params)
+        rows_future = executor.submit(_rows, query, params)
+        total_rows = total_future.result()
+        rows = rows_future.result()
+    return {"total": total_rows[0]["total"] if total_rows else 0, "page": page, "page_size": page_size, "rows": rows}
 
 
 def detail(uuid: str) -> dict[str, Any] | None:
@@ -141,7 +179,7 @@ def detail(uuid: str) -> dict[str, Any] | None:
         f.es_mixta, f.n_lineas_gas, f.n_lineas_total, f.claves_gas, f.conceptos_gas,
         s.estado_sap, s.tipo_match_sap, s.belnr_sap, s.fecha_registro_sap,
         s.dias_diferencia, s.werks, s.sitio_consumo, s.tipo_match_sitio,
-        s.tiene_recepcion_mseg, s.mseg_cantidad, s.mseg_valor_unitario, s.mseg_importe
+        s.confianza_mseg, s.mseg_cantidad, s.mseg_valor_unitario, s.mseg_importe
       {_base_query()}
       WHERE f.uuid = @uuid
       LIMIT 1

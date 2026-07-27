@@ -14,6 +14,8 @@ técnica explícita.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from datetime import date
 from typing import Any, Literal
 
 from google.cloud import bigquery
@@ -121,54 +123,140 @@ _SELECT_COLA = """
         s.estado_sap, s.fuente_sap, s.werks, s.sitio_consumo, s.direccion_sitio,
         s.tipo_match_sap, s.belnr_sap, s.fecha_registro_sap, s.dias_diferencia,
         s.estado_pago_sap, s.belnr_pago_sap, s.fecha_pago_sap,
-        s.tipo_match_sitio, s.tiene_recepcion_mseg,
-        s.mseg_cantidad, s.mseg_valor_unitario, s.mseg_importe
+        s.tipo_match_sitio, s.confianza_mseg,
+        s.mseg_cantidad, s.mseg_valor_unitario, s.mseg_importe,
+        s.ceco_sugerido, s.ceco_sugerido_origen
 """
 
 
-def _cola_query(estado: str) -> str:
+def _filtros_cola(
+    *,
+    busqueda: str | None = None,
+    fecha_desde: date | None = None,
+    fecha_hasta: date | None = None,
+    proveedor_id: str | None = None,
+    estado_sap: str | None = None,
+    confianza_mseg: str | None = None,
+    sitio: str = "all",
+) -> tuple[str, list[bigquery.ScalarQueryParameter]]:
+    """Filtros de la cola de aprobación -- clave_sat/clasificación (que sí tiene
+    M1) se dejaron fuera a propósito: en M2/M3 todas las facturas ya pasaron la
+    clasificación, así que filtrar por eso no aporta nada a la decisión de
+    Compras/Gerencia (feedback explícito del usuario, jul-2026). confianza_mseg
+    añade 'sin_evidencia' (no existe como filtro en M1) para poder aislar las
+    facturas sin ningún rastro de MSEG."""
+    clauses = ["TRUE"]
+    params: list[bigquery.ScalarQueryParameter] = []
+    if busqueda and busqueda.strip():
+        clauses.append(
+            """LOWER(CONCAT(
+              COALESCE(f.serie, ''), COALESCE(CAST(f.folio AS STRING), ''), ' ',
+              COALESCE(f.folio_key, ''), ' ',
+              COALESCE(CAST(f.folio AS STRING), ''), ' ',
+              COALESCE(f.uuid, ''), ' ',
+              COALESCE(v.razon_social, f.emisor_rfc, '')
+            )) LIKE CONCAT('%', LOWER(@busqueda), '%')"""
+        )
+        params.append(bigquery.ScalarQueryParameter("busqueda", "STRING", busqueda.strip()))
+    if fecha_desde:
+        clauses.append("DATE(f.fecha) >= @fecha_desde")
+        params.append(bigquery.ScalarQueryParameter("fecha_desde", "DATE", fecha_desde))
+    if fecha_hasta:
+        clauses.append("DATE(f.fecha) <= @fecha_hasta")
+        params.append(bigquery.ScalarQueryParameter("fecha_hasta", "DATE", fecha_hasta))
+    if proveedor_id:
+        clauses.append("f.id_proveedor = @proveedor_id")
+        params.append(bigquery.ScalarQueryParameter("proveedor_id", "STRING", proveedor_id))
+    if estado_sap:
+        clauses.append("s.estado_sap = @estado_sap")
+        params.append(bigquery.ScalarQueryParameter("estado_sap", "STRING", estado_sap))
+    if confianza_mseg == "sin_evidencia":
+        clauses.append("s.confianza_mseg IS NULL")
+    elif confianza_mseg:
+        clauses.append("s.confianza_mseg = @confianza_mseg")
+        params.append(bigquery.ScalarQueryParameter("confianza_mseg", "STRING", confianza_mseg))
+    if sitio == "with_site":
+        clauses.append("s.werks IS NOT NULL")
+    elif sitio == "without_site":
+        clauses.append("s.werks IS NULL")
+    return " AND ".join(clauses), params
+
+
+def _cola_from(extra_where: str) -> str:
     return f"""
-      SELECT {_SELECT_COLA}
       FROM {_APROBACION} a
       JOIN {_FOLIO} f ON a.uuid = f.uuid
       LEFT JOIN {_SAP} s ON f.uuid = s.uuid
       LEFT JOIN {_VENDORS} v ON f.id_proveedor = v.id_proveedor
-      WHERE a.estado = @estado
-      ORDER BY fecha DESC
+      WHERE {extra_where}
     """
 
 
-def cola_compras() -> list[dict[str, Any]]:
+def _paginar_cola(
+    from_clause: str, params: list[bigquery.ScalarQueryParameter], order_by: str, page: int, page_size: int
+) -> dict[str, Any]:
+    """Mismo patrón que hidrocarburos_engine.search(): página + conteo total en
+    una llamada, para que la UI muestre 'Página X de Y' igual que M1 en vez de
+    traer las 500+ facturas de la cola de golpe. Los KPIs de la cola (importe
+    total, % validado SAP, % con MSEG) se calculaban antes recorriendo TODAS
+    las filas cargadas -- ahora que solo se carga una página a la vez, esos
+    agregados hay que pedirlos aparte (resumen), igual que summary()/search()
+    en hidrocarburos_engine.py."""
+    query_params = params + [
+        bigquery.ScalarQueryParameter("limit", "INT64", page_size),
+        bigquery.ScalarQueryParameter("offset", "INT64", (page - 1) * page_size),
+    ]
+    query = f"SELECT {_SELECT_COLA} {from_clause} ORDER BY {order_by} LIMIT @limit OFFSET @offset"
+    resumen_query = f"""
+      SELECT
+        COUNT(*) AS total,
+        COALESCE(SUM(f.importe_gas), 0) AS importe_gas_total,
+        COUNTIF(s.estado_sap = 'validada_sap') AS validadas_sap,
+        COUNTIF(s.confianza_mseg IS NOT NULL) AS con_mseg
+      {from_clause}
+    """
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        resumen_future = executor.submit(_rows, resumen_query, params)
+        rows_future = executor.submit(_rows, query, query_params)
+        resumen_rows = resumen_future.result()
+        rows = rows_future.result()
+    resumen = resumen_rows[0] if resumen_rows else {"total": 0, "importe_gas_total": 0, "validadas_sap": 0, "con_mseg": 0}
+    return {
+        "total": resumen["total"],
+        "page": page,
+        "page_size": page_size,
+        "resumen": {
+            "importe_gas_total": resumen["importe_gas_total"],
+            "validadas_sap": resumen["validadas_sap"],
+            "con_mseg": resumen["con_mseg"],
+        },
+        "rows": rows,
+    }
+
+
+def cola_compras(*, page: int = 1, page_size: int = 50, **filtros: Any) -> dict[str, Any]:
     sync_pendientes()
-    return _rows(
-        _cola_query("pendiente_validacion_compras"),
-        [bigquery.ScalarQueryParameter("estado", "STRING", "pendiente_validacion_compras")],
-    )
+    where, params = _filtros_cola(**filtros)
+    full_params = [bigquery.ScalarQueryParameter("estado", "STRING", "pendiente_validacion_compras")] + params
+    return _paginar_cola(_cola_from(f"a.estado = @estado AND ({where})"), full_params, "fecha DESC", page, page_size)
 
 
-def cola_gerencia() -> list[dict[str, Any]]:
-    return _rows(
-        _cola_query("pendiente_aprobacion_gerencia"),
-        [bigquery.ScalarQueryParameter("estado", "STRING", "pendiente_aprobacion_gerencia")],
-    )
+def cola_gerencia(*, page: int = 1, page_size: int = 50, **filtros: Any) -> dict[str, Any]:
+    where, params = _filtros_cola(**filtros)
+    full_params = [bigquery.ScalarQueryParameter("estado", "STRING", "pendiente_aprobacion_gerencia")] + params
+    return _paginar_cola(_cola_from(f"a.estado = @estado AND ({where})"), full_params, "fecha DESC", page, page_size)
 
 
-def historial() -> list[dict[str, Any]]:
+def historial(*, page: int = 1, page_size: int = 50, **filtros: Any) -> dict[str, Any]:
     """Facturas que ya salieron de la bandeja inicial de Compras -- pendientes
     de que Gerencia decida, aprobadas, o rechazadas. Es la vista que hace
     falta para reeditar (D-reversibilidad) antes de que Gerencia decida, o
     para reabrir una vez decidido; sin esto no hay forma de encontrar esas
     facturas desde la interfaz."""
-    query = f"""
-      SELECT {_SELECT_COLA}
-      FROM {_APROBACION} a
-      JOIN {_FOLIO} f ON a.uuid = f.uuid
-      LEFT JOIN {_SAP} s ON f.uuid = s.uuid
-      LEFT JOIN {_VENDORS} v ON f.id_proveedor = v.id_proveedor
-      WHERE a.estado IN ('pendiente_aprobacion_gerencia', 'aprobada', 'rechazada')
-      ORDER BY COALESCE(a.fecha_reapertura, a.fecha_aprobacion_gerencia, a.fecha_validacion_compras) DESC
-    """
-    return _rows(query)
+    where, params = _filtros_cola(**filtros)
+    extra_where = f"a.estado IN ('pendiente_aprobacion_gerencia', 'aprobada', 'rechazada') AND ({where})"
+    order_by = "COALESCE(a.fecha_reapertura, a.fecha_aprobacion_gerencia, a.fecha_validacion_compras) DESC"
+    return _paginar_cola(_cola_from(extra_where), params, order_by, page, page_size)
 
 
 def catalogo_ceco() -> list[dict[str, Any]]:
@@ -176,27 +264,59 @@ def catalogo_ceco() -> list[dict[str, Any]]:
     refresco conocido, ver Datos/PHASE1/hallazgos.md §24 y Esquema.md.
 
     Acotado a KOKRS='PROA' (area de control de Proan): CSKT no trae sociedad/RFC
-    (BUKRS), pero KOKRS parte el maestro en PROA (5.699, Proan -- aqui vive el
-    unico CECO real del gas, 0000042060), SC01 (4.075, otra empresa: retail de
-    alimentos) y PREU (27, vehiculos/activos). Simetrico con catalogo_sitios(),
-    que excluye la red MK## de Maka. NO se acota a los CECOs vistos en gas (solo
-    1-2 en MSEG): el dato ligado a la factura casi nunca existe, asi que Compras
-    necesita el universo valido de Proan, no la lista de los ya conciliados."""
+    (BUKRS), pero KOKRS parte el maestro en PROA (5.699, Proan), SC01 (4.075,
+    otra empresa: retail de alimentos) y PREU (27, vehiculos/activos).
+
+    CORREGIDO jul-2026 (D22 revertida, ver PHASE2/resumen.md): antes traia el
+    catalogo COMPLETO de PROA (~5.569) porque MSEG solo cubria 1-2 sitios de
+    gas -- ya no es el caso (fix de filtro por proveedor, 543/1.056 con
+    ceco_sugerido). Acotado a los CECOs que YA aparecieron en datos de gas
+    (MSEG de los 11 proveedores, o ya capturados a mano por Compras) -- lista
+    mucho mas corta y relevante. Sigue sin bloquear: el <datalist> del frontend
+    permite escribir cualquier codigo que no este en esta lista."""
     query = f"""
-      SELECT DISTINCT KOSTL AS id, LTEXT AS nombre
-      FROM {_CECO_CATALOGO}
-      WHERE DATBI = '99991231' AND LTEXT IS NOT NULL AND KOKRS = 'PROA'
+      WITH vistos AS (
+        SELECT DISTINCT NULLIF(TRIM(KOSTL), '') AS ceco
+        FROM `proan-quantrue.D00_SANDBOX.proan_MSEG_HIDROCARBUROS_20260714`
+        WHERE BWART != '102'
+          AND LTRIM(TRIM(LIFNR), '0') IN (SELECT DISTINCT LTRIM(TRIM(id_proveedor), '0') FROM {_FOLIO})
+        UNION DISTINCT
+        SELECT DISTINCT NULLIF(TRIM(ceco), '') FROM {_APROBACION} WHERE ceco IS NOT NULL
+      )
+      SELECT DISTINCT c.KOSTL AS id, c.LTEXT AS nombre
+      FROM {_CECO_CATALOGO} c
+      JOIN vistos v ON v.ceco = c.KOSTL
+      WHERE c.DATBI = '99991231' AND c.LTEXT IS NOT NULL AND c.KOKRS = 'PROA'
       ORDER BY nombre
     """
     return _rows(query)
 
 
 def catalogo_sitios() -> list[dict[str, Any]]:
-    """Sugerencia (D29, no bloqueante) -- excluye la red MK## (Maka, no Proan)."""
+    """Sugerencia (D29, no bloqueante) -- excluye la red MK## (Maka, no Proan).
+
+    CORREGIDO jul-2026 (simetrico a catalogo_ceco()): acotado a sitios que YA
+    aparecieron en datos de gas -- WERKS resuelto via EKBE/pedido
+    (HCARB_GOLD_VALIDACION_SAP.werks), WERKS visto en MSEG de los 11
+    proveedores, o ya capturado a mano por Compras (werks_manual). El gas real
+    converge en 4 plantas (D10) de las 492 de todo Proan -- antes traia las
+    492. Sigue sin bloquear: el <datalist> permite cualquier codigo no listado.
+    """
     query = f"""
-      SELECT id_centro AS id, descripcion_centro AS nombre
-      FROM {_CENTROS}
-      WHERE NOT STARTS_WITH(id_centro, 'MK')
+      WITH vistos AS (
+        SELECT DISTINCT werks FROM {_SAP} WHERE werks IS NOT NULL
+        UNION DISTINCT
+        SELECT DISTINCT NULLIF(TRIM(WERKS), '') AS werks
+        FROM `proan-quantrue.D00_SANDBOX.proan_MSEG_HIDROCARBUROS_20260714`
+        WHERE BWART != '102'
+          AND LTRIM(TRIM(LIFNR), '0') IN (SELECT DISTINCT LTRIM(TRIM(id_proveedor), '0') FROM {_FOLIO})
+        UNION DISTINCT
+        SELECT DISTINCT NULLIF(TRIM(werks_manual), '') AS werks FROM {_APROBACION} WHERE werks_manual IS NOT NULL
+      )
+      SELECT DISTINCT c.id_centro AS id, c.descripcion_centro AS nombre
+      FROM {_CENTROS} c
+      JOIN vistos v ON v.werks = c.id_centro
+      WHERE NOT STARTS_WITH(c.id_centro, 'MK')
       ORDER BY nombre
     """
     return _rows(query)
