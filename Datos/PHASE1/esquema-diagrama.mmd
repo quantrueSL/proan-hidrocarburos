@@ -1,0 +1,72 @@
+erDiagram
+    cfdis {
+        string UUID PK
+        string EmisorRfc FK
+        string ClaveProdServ
+        string Serie
+        string Folio
+        float Importe
+        float Total
+    }
+    dm_vendors {
+        string id_proveedor PK
+        string rfc
+    }
+    MSEG_extracto_o_crudo {
+        string MBLNR PK
+        string LIFNR FK
+        string MATNR FK
+        string WERKS FK
+        string KOSTL FK
+        string XBLNR_MKPF
+        numeric DMBTR
+        numeric ERFMG
+        string BWART
+    }
+    dm_material {
+        string material_number PK
+        string external_material_group
+    }
+    proan_CSKT {
+        string KOSTL PK
+        string DATBI PK
+        string LTEXT
+    }
+    dm_centros {
+        string id_centro PK
+        string descripcion_centro
+    }
+    bsik_bsak {
+        string LIFNR FK
+        string BELNR PK
+        float DMBTR
+    }
+    bkpf {
+        string BELNR PK
+        string XBLNR
+        string BLART
+        string BUKRS
+    }
+    sap_purchasing_orders {
+        string EBELN PK
+        string LIFNR FK
+        string WERKS
+    }
+    sap_ekbe {
+        string EBELN FK
+        string XBLNR
+    }
+
+    cfdis }o--|| dm_vendors : "EmisorRfc = rfc"
+    MSEG_extracto_o_crudo }o--|| dm_vendors : "LIFNR = id_proveedor"
+    MSEG_extracto_o_crudo }o--|| dm_material : "MATNR = material_number"
+    MSEG_extracto_o_crudo }o--|| proan_CSKT : "KOSTL = KOSTL (DATBI vigente)"
+    MSEG_extracto_o_crudo }o--|| dm_centros : "WERKS = id_centro"
+    bsik_bsak }o--|| dm_vendors : "LIFNR = id_proveedor"
+    sap_purchasing_orders }o--|| dm_vendors : "LIFNR = id_proveedor"
+    sap_purchasing_orders }o--|| dm_centros : "WERKS = id_centro (sitio de consumo)"
+    sap_ekbe }o--|| sap_purchasing_orders : "EBELN"
+    cfdis }o..o{ MSEG_extracto_o_crudo : "folio (+ score importe), filtrado por proveedor (48%)"
+    cfdis }o..o{ bkpf : "nofolio+fecha ~ XBLNR (87%; la serie varia)"
+    cfdis }o..o{ sap_ekbe : "nofolio+fecha ~ XBLNR (58%, sitio via pedido)"
+    cfdis }o..o{ bsik_bsak : "Total ~ DMBTR (casi vacia para gas)"

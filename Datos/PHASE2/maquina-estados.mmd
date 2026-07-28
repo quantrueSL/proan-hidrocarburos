@@ -1,0 +1,12 @@
+stateDiagram-v2
+    [*] --> clasificada
+    clasificada --> validada_sap
+    clasificada --> sin_match_sap
+    validada_sap --> pendiente_validacion_compras
+    sin_match_sap --> pendiente_validacion_compras : flag suave, no bloqueo
+    pendiente_validacion_compras --> pendiente_aprobacion_gerencia
+    pendiente_validacion_compras --> rechazada
+    pendiente_aprobacion_gerencia --> aprobada
+    pendiente_aprobacion_gerencia --> rechazada
+    aprobada --> pagada : aparcado (D15/Módulo 4)
+    rechazada --> [*]
