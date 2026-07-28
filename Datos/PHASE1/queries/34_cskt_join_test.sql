@@ -1,9 +1,0 @@
--- Probar el JOIN real con el maestro de CECOs para los KOSTL del universo de gas.
--- Ver si KTEXT/LTEXT/MCTXT son iguales o distintos, y si hay varias filas por KOSTL (vigencias).
-SELECT KOSTL, KOKRS, DATBI, KTEXT, LTEXT, MCTXT
-FROM `proan-quantrue.D00_SANDBOX.proan_CSKT_20260714`
-WHERE KOSTL IN ('0000042060','0000042051','0000042087','0000042070','0000042050',
-                '0000041744','0000043101','0000042401','0000042521','0000041942',
-                '0000040500','0000041700','0000041910','0000041977','0000041860',
-                '0000041865','0000041976','0000044080')
-ORDER BY KOSTL, DATBI;
