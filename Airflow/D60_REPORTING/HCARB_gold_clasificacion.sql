@@ -4,11 +4,7 @@
 -- Dedup obligatorio antes de sumar (hallazgo Fase 1 §18): (UUID, ClaveProdServ, Cantidad,
 -- Importe, Descripcion) -- 24 de 1.051 facturas traen 2 filas exactas duplicadas del mismo
 -- concepto.
--- importe_gas parte de SubTotal (validado por el SAT), no de sumar Importe de línea --
--- ver el FIX jul-2026 más abajo y Datos/naturaleza-de-los-datos.md. El "74% de facturas
--- mixtas" que motivó originalmente sumar por línea (Fase 1 §16) resultó ser el mismo bug
--- de líneas faltantes en cfdis, no mezcla real de producto -- con el fix, 0 facturas son
--- mixtas de verdad.
+-- importe_gas parte de SubTotal, no de sumar Importe de línea (ver más abajo).
 --
 -- D26 (jul-2026): originalmente había también HCARB_GOLD_CLASIFICACION_LINEA (grano
 -- línea-concepto, D12/D19) para desglosar facturas mixtas. Se eliminó: al ejecutar salió
@@ -91,23 +87,7 @@ SELECT
   ANY_VALUE(c.SubTotal) AS subtotal,
   ANY_VALUE(c.Total) AS total,
   ANY_VALUE(c.TotalImpuestosTrasladados) AS total_impuestos_trasladados,
-  -- FIX jul-2026 (investigación confianza_mseg): importe_gas ya NO suma solo las líneas
-  -- de gas que trae cfdis -- para 414/547 facturas cfdis solo trae 1 línea (de gas,
-  -- internamente consistente: Cantidad*ValorUnitario=Importe) mientras SubTotal es 17-22x
-  -- mayor -- el SAT exige SubTotal=suma de TODOS los conceptos para timbrar, así que a esas
-  -- facturas les faltan líneas en la extracción de cfdis (no se pueden recuperar, no hay
-  -- fuente mejor). Confirmado con una fuente independiente (proan_MSEG_HIDROCARBUROS,
-  -- SAP): su importe de recepción reconcilia con SubTotal (mediana ratio 1.0) en el 100% de
-  -- los casos, mixtos o no -- nunca con el importe_gas viejo para los mixtos (20.2x). Se
-  -- resta el importe no-gas confirmado del SubTotal (fuente validada por el SAT) en vez de
-  -- sumar las líneas de gas que veamos -- funciona aunque falten líneas de gas en cfdis, y
-  -- sigue siendo correcto si algún día aparece una factura genuinamente mixta.
   ANY_VALUE(c.SubTotal) - SUM(IF(NOT c.es_linea_gas, c.Importe, 0)) AS importe_gas,
-  -- es_mixta ya NO compara SubTotal contra importe_gas (eso es lo que estaba mal:
-  -- comparar el SubTotal bueno contra el importe_gas roto siempre parecía "mixta").
-  -- Ahora es directamente "¿hay una línea real marcada como no-gas?" -- con los datos
-  -- de hoy, 0 facturas la tienen (las 414 "mixtas" del hallazgo de Fase 1 §16 eran este
-  -- mismo bug, no mezcla real de producto).
   COUNTIF(NOT c.es_linea_gas) > 0 AS es_mixta,
   COUNTIF(c.es_linea_gas) AS n_lineas_gas,
   COUNT(*) AS n_lineas_total,

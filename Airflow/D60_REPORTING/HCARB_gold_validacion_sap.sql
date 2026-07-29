@@ -125,21 +125,27 @@ sap_match AS (
 -- de origen, no por AUGDT. fecha_pago = AUGDT (fecha de compensación) solo tiene sentido en
 -- BSAK. Recupera facturas que existen en SAP como partida de proveedor pero cuyo documento
 -- no casó como 'RE', y añade el estado de pago.
+bsik_actual AS (
+  SELECT XBLNR_reference_document_number AS XBLNR, LIFNR_vendor_number AS LIFNR,
+    BELNR_account_document_number AS BELNR, CAST(BLDAT_document_dt AS STRING) AS BLDAT
+  FROM `proan-quantrue.D30_INTEGRATION.sap_bsik_open_items`
+),
 partidas_proveedor AS (
   SELECT
     UPPER(REPLACE(TRIM(XBLNR), ' ', '')) AS xblnr_key,
     LTRIM(REGEXP_REPLACE(TRIM(XBLNR), r'[^0-9]', ''), '0') AS xblnr_numero,
     LTRIM(TRIM(LIFNR), '0') AS proveedor_key,
     BELNR AS belnr, BLDAT AS fecha_sap, AUGDT AS fecha_pago, 'pagada' AS estado_pago
-  FROM `proan-quantrue.D00_SANDBOX.proan_BSAK_20260708`
-  WHERE XBLNR IS NOT NULL AND LIFNR IS NOT NULL
+  FROM `proan-quantrue.D00_SANDBOX.proan_BSAK_*`
+  WHERE _TABLE_SUFFIX = (SELECT MAX(_TABLE_SUFFIX) FROM `proan-quantrue.D00_SANDBOX.proan_BSAK_*`)
+    AND XBLNR IS NOT NULL AND LIFNR IS NOT NULL
   UNION ALL
   SELECT
     UPPER(REPLACE(TRIM(XBLNR), ' ', '')),
     LTRIM(REGEXP_REPLACE(TRIM(XBLNR), r'[^0-9]', ''), '0'),
     LTRIM(TRIM(LIFNR), '0'),
     BELNR, BLDAT, CAST(NULL AS STRING), 'pendiente'
-  FROM `proan-quantrue.D00_SANDBOX.proan_BSIK_20260722`
+  FROM bsik_actual
   WHERE XBLNR IS NOT NULL AND LIFNR IS NOT NULL
 ),
 match_proveedor AS (
@@ -241,13 +247,6 @@ mseg_scored AS (
       CASE WHEN m.folio_key_mseg = f.folio_key THEN 4
            WHEN LENGTH(f.folio_numero) >= 5 AND m.folio_numero_mseg = f.folio_numero THEN 3
            ELSE 0 END
-      -- Tolerancia de $0.20 MXN (jul-2026, post-fix importe_gas -- ambos importes,
-      -- doc_importe y importe_gas, están en pesos, DMBTR/SubTotal de moneda local, nunca
-      -- en dólares): el fix de importe_gas (SubTotal - no-gas) deja una diferencia residual
-      -- de ruido de redondeo (mediana -$0.01, rango -$0.03 a -$0.01 entre doc_importe y
-      -- importe_gas) que el exacto a 2 decimales no perdona -- confirmado contra BigQuery
-      -- real: 0/334 Media pasaban el exacto pese a que la mediana del ratio es 1.0. $0.20
-      -- cubre ese ruido sin abrir la puerta a colar un importe realmente distinto.
       + CASE WHEN ABS(m.doc_importe - f.importe_gas) <= 0.2 THEN 3
              WHEN ROUND(m.doc_importe, 1) = ROUND(f.importe_gas, 1) THEN 1
              ELSE 0 END
@@ -332,6 +331,7 @@ sitio_direccion AS (
     SELECT WERKS AS werks,
       ANY_VALUE(STRAS) AS calle, ANY_VALUE(ORT01) AS ciudad, ANY_VALUE(REGIO) AS region
     FROM `proan-quantrue.D00_SANDBOX.proan_T001W_*`
+    WHERE _TABLE_SUFFIX = (SELECT MAX(_TABLE_SUFFIX) FROM `proan-quantrue.D00_SANDBOX.proan_T001W_*`)
     GROUP BY WERKS
   )
 )

@@ -26,10 +26,28 @@ export type DashboardData = {
   resumen: DashboardResumen;
   gasto_por_proveedor: DashboardGastoItem[];
   gasto_por_sitio: DashboardGastoItem[];
-  // Cobertura combinada CECO/sitio -- grupo es una de 4 categorías fijas
-  // ("Con CECO y sitio", "Con CECO solo", "Con sitio solo", "Sin nada").
-  cobertura_ceco_sitio: DashboardGastoItem[];
+  // Agrupado por CECO real, con nombre resuelto vía catálogo SAP (CSKT).
+  // Facturas cuyo documento MSEG reparte el gasto entre varios centros sin
+  // uno dominante caen en el grupo "Varios CECO (sin confirmar)".
+  gasto_por_ceco: DashboardGastoItem[];
   gasto_por_periodo: DashboardGastoItem[];
+};
+
+export type DashboardSatInvoice = {
+  uuid: string;
+  serie: string | null;
+  folio: string | null;
+  fecha: string | null;
+  proveedor: string;
+  importe_gas: number | null;
+  estatus_sat: "cancelado" | "sin_confirmar";
+};
+
+export type DashboardSatDetail = {
+  total: number;
+  canceladas: number;
+  sin_confirmar: number;
+  rows: DashboardSatInvoice[];
 };
 
 export type DashboardFiltros = {

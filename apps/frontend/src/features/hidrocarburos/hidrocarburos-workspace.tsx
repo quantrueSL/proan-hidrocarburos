@@ -171,12 +171,19 @@ export function HydrocarburosWorkspace({ initialCatalog, initialError, initialFi
     </FiltersSidebar>
     <div className="hydro-page" data-module="m1" data-module-description={MODULE_DESCRIPTION} data-module-title={MODULE_TITLE}>
       {error ? <p className="hydro-error">{error}</p> : null}
-      <section className="hydro-module-kpis" aria-label="Indicadores M1">
-        <Kpi label="Facturas CFDI" value={number.format(total)} />
-        <Kpi label="Importe gas" value={money.format(Number(summary?.importe_gas || 0))} />
-        <Kpi label="Facturas mixtas" value={number.format(summary?.facturas_mixtas || 0)} />
-        <Kpi label="Solo gas" value={number.format(Math.max(0, total - (summary?.facturas_mixtas || 0)))} />
-      </section>
+      <header className="operational-summary">
+        <div className="operational-summary-title">
+          <p>Control documental</p>
+          <h1>Clasificación de Hidrocarburos</h1>
+          <span>Identificación fiscal y desglose del consumo de gas en facturas CFDI.</span>
+        </div>
+        <section className="hydro-module-kpis" aria-label="Indicadores M1">
+          <Kpi label="Facturas CFDI" value={number.format(total)} />
+          <Kpi label="Importe gas" value={money.format(Number(summary?.importe_gas || 0))} />
+          <Kpi label="Facturas mixtas" value={number.format(summary?.facturas_mixtas || 0)} />
+          <Kpi label="Solo gas" value={number.format(Math.max(0, total - (summary?.facturas_mixtas || 0)))} />
+        </section>
+      </header>
       <section className="hydro-table-card hydro-module-table">
         <div className="hydro-table-title"><div><h2>Facturas clasificadas</h2><span>{invoices ? `${number.format(invoices.total)} resultados` : "Sin resultados"}</span></div></div>
         <div className="hydro-table-wrap"><table><thead><tr><th>Fecha</th><th>Proveedor</th><th>Folio</th><th>Material</th><th>Cantidad</th><th>Importe gas</th><th>Clave SAT</th><th>Clasificación</th></tr></thead><tbody>{invoices?.rows.map((row) => <tr aria-label={`Abrir factura ${row.serie || ""}${row.folio || row.uuid}`} key={row.uuid} onClick={() => openDetail(row)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetail(row); } }}><td>{formatDate(row.fecha)}</td><td>{row.proveedor}</td><td>{row.serie || ""}{row.folio || "—"}</td><td><span className="hydro-truncate" title={row.material || undefined}>{row.material || "—"}</span></td><td>{row.cantidad == null ? "—" : `${number.format(Number(row.cantidad))}${row.clave_unidad ? ` ${row.clave_unidad}` : ""}`}</td><td>{money.format(Number(row.importe_gas || 0))}</td><td>{row.claves_gas?.length ? row.claves_gas.join(", ") : "—"}</td><td><span className="hydro-badge is-neutral">{classificationLabel(row.es_mixta)}</span></td></tr>)}</tbody></table>{!loading && !invoices?.rows.length ? <div className="hydro-empty"><b>No encontramos facturas</b><span>Prueba con otros filtros o elimina el texto de búsqueda.</span></div> : null}</div>

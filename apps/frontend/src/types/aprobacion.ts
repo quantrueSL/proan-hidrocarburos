@@ -23,6 +23,14 @@ export type AprobacionInvoice = {
   proveedor: string;
   importe_gas: number | null;
   es_mixta: boolean;
+  total: number | null;
+  moneda: string | null;
+  material_principal: string | null;
+  cantidad_principal: number | null;
+  clave_unidad_principal: string | null;
+  claves_gas: string[];
+  n_lineas_gas: number | null;
+  n_lineas_total: number | null;
   estado_sap: string | null;
   fuente_sap: string | null;
   werks: string | null;

@@ -6,8 +6,8 @@ A. Resumen de estatus: total emitidas, validadas (pasaron Compras), aprobadas,
    rechazadas, pendientes -- más lo que aporta D24 (estatus_sat.py): vigentes/
    canceladas/sin consultar ante el SAT, y la cobertura MSEG (jul-2026, ver
    HCARB_gold_validacion_sap.sql -- confianza_mseg Alta/Media/sin evidencia).
-B. Análisis de gasto: por proveedor, por sitio, cobertura CECO/sitio combinada,
-   y acumulado por periodo (mensual).
+B. Análisis de gasto: por proveedor, por sitio, por CECO (con nombre resuelto
+   vía catálogo SAP), y acumulado por periodo (mensual).
 
 Filtros (jul-2026): fecha_desde/fecha_hasta + proveedor_id/estado_sap/
 confianza_mseg/estatus_sat acotan las 5 queries a la vez (mismo WHERE
@@ -26,6 +26,7 @@ from typing import Any
 
 from google.cloud import bigquery
 
+from financialbi.aprobacion_engine import _CECO_CATALOGO
 from financialbi.db import _get_bq_client
 from financialbi.hidrocarburos_engine import _FOLIO, _SAP, _VENDORS
 
@@ -106,32 +107,78 @@ def _resumen_estatus(where: str, params: list[bigquery.ScalarQueryParameter]) ->
     return rows[0] if rows else {}
 
 
-def _cobertura_ceco_sitio(where: str, params: list[bigquery.ScalarQueryParameter]) -> list[dict[str, Any]]:
-    """Cobertura combinada CECO/sitio -- CECO real es COALESCE(a.ceco, el
-    asignado a mano en Compras, s.ceco_sugerido, evidencia real de SAP/MSEG:
-    ver HCARB_gold_validacion_sap.sql). No es "Sin CECO" al 100% como parecía
-    mirando solo a.ceco -- 543/1056 folios ya tienen ceco_sugerido real."""
+def facturas_sat_atencion(
+    *,
+    fecha_desde: date | None = None,
+    fecha_hasta: date | None = None,
+    proveedor_id: str | None = None,
+    estado_sap: str | None = None,
+    confianza_mseg: str | None = None,
+    estatus_sat: str | None = None,
+) -> dict[str, Any]:
+    """Detalle bajo demanda para el modal SAT del dashboard."""
+    where, params = _construir_filtro(
+        fecha_desde, fecha_hasta, proveedor_id, estado_sap, confianza_mseg, estatus_sat
+    )
+    query = f"""
+      SELECT
+        f.uuid,
+        f.serie,
+        CAST(f.folio AS STRING) AS folio,
+        DATE(f.fecha) AS fecha,
+        COALESCE(v.razon_social, f.emisor_rfc) AS proveedor,
+        f.importe_gas,
+        CASE
+          WHEN e.estatus_cancelacion = 'cancelado' THEN 'cancelado'
+          ELSE 'sin_confirmar'
+        END AS estatus_sat
+      FROM {_FOLIO} f
+      LEFT JOIN {_VENDORS} v ON f.id_proveedor = v.id_proveedor
+      LEFT JOIN {_SAP} s ON f.uuid = s.uuid
+      LEFT JOIN {_ESTATUS_SAT} e ON f.uuid = e.uuid
+      WHERE {where}
+        AND (e.estatus_cancelacion = 'cancelado'
+          OR e.uuid IS NULL
+          OR e.estatus_cancelacion = 'no_encontrado')
+      ORDER BY
+        CASE WHEN e.estatus_cancelacion = 'cancelado' THEN 0 ELSE 1 END,
+        DATE(f.fecha) DESC,
+        proveedor
+    """
+    rows = _rows(query, params)
+    return {
+        "total": len(rows),
+        "canceladas": sum(row["estatus_sat"] == "cancelado" for row in rows),
+        "sin_confirmar": sum(row["estatus_sat"] == "sin_confirmar" for row in rows),
+        "rows": rows,
+    }
+
+
+def _gasto_por_ceco(where: str, params: list[bigquery.ScalarQueryParameter]) -> list[dict[str, Any]]:
+    """CECO real es COALESCE(a.ceco, el asignado a mano en Compras,
+    s.ceco_sugerido, evidencia real de SAP/MSEG: ver HCARB_gold_validacion_sap.sql).
+    Puede traer varios códigos separados por coma cuando el documento MSEG que
+    casó reparte el gasto entre varios centros sin que ninguno domine (origen
+    'documento_multiple', ~24% de las facturas) -- se agrupan aparte en vez de
+    fragmentar el gráfico en una barra distinta por cada combinación."""
     query = f"""
       SELECT
         CASE
-          WHEN ceco IS NOT NULL AND sitio IS NOT NULL THEN 'Con CECO y sitio'
-          WHEN ceco IS NOT NULL THEN 'Con CECO solo'
-          WHEN sitio IS NOT NULL THEN 'Con sitio solo'
-          ELSE 'Sin nada'
+          WHEN x.ceco IS NULL THEN 'Sin CECO'
+          WHEN STRPOS(x.ceco, ',') > 0 THEN 'Varios CECO (sin confirmar)'
+          ELSE COALESCE(cat.LTEXT, x.ceco)
         END AS grupo,
-        SUM(importe_gas) AS importe_gas,
+        SUM(x.importe_gas) AS importe_gas,
         COUNT(*) AS n_facturas
       FROM (
-        SELECT
-          f.importe_gas,
-          COALESCE(a.ceco, s.ceco_sugerido) AS ceco,
-          COALESCE(a.werks_manual, s.sitio_consumo) AS sitio
+        SELECT f.importe_gas, COALESCE(a.ceco, s.ceco_sugerido) AS ceco
         FROM {_FOLIO} f
         LEFT JOIN {_APROBACION} a ON f.uuid = a.uuid
         LEFT JOIN {_SAP} s ON f.uuid = s.uuid
         LEFT JOIN {_ESTATUS_SAT} e ON f.uuid = e.uuid
         WHERE {where}
-      )
+      ) x
+      LEFT JOIN {_CECO_CATALOGO} cat ON cat.KOSTL = TRIM(x.ceco) AND cat.DATBI = '99991231' AND cat.KOKRS = 'PROA'
       GROUP BY grupo
       ORDER BY n_facturas DESC
     """
@@ -203,13 +250,13 @@ def resumen_completo(
         resumen_future = executor.submit(_resumen_estatus, where, params)
         proveedor_future = executor.submit(_gasto_por_proveedor, where, params)
         sitio_future = executor.submit(_gasto_por_sitio, where, params)
-        cobertura_future = executor.submit(_cobertura_ceco_sitio, where, params)
+        ceco_future = executor.submit(_gasto_por_ceco, where, params)
         periodo_future = executor.submit(_gasto_por_periodo, where, params)
 
     return {
         "resumen": resumen_future.result(),
         "gasto_por_proveedor": proveedor_future.result(),
         "gasto_por_sitio": sitio_future.result(),
-        "cobertura_ceco_sitio": cobertura_future.result(),
+        "gasto_por_ceco": ceco_future.result(),
         "gasto_por_periodo": periodo_future.result(),
     }

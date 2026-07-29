@@ -11,7 +11,6 @@
 -- Se deja aquí como referencia versionada (antes solo vivía como docstring en
 -- Python) para que el esquema no dependa de leer código para conocerlo.
 -- Diagrama de la máquina de estados: flujo-aprobacion.png (fuente flujo-aprobacion.mmd).
--- Detalle narrativo también en Datos/PHASE2/Esquema.md §4 (no versionado en git).
 
 CREATE TABLE IF NOT EXISTS `proan-quantrue.D60_REPORTING.HCARB_gold_aprobacion` (
   uuid STRING NOT NULL,

@@ -23,6 +23,7 @@ type Props = {
 const PAGE_SIZE = 50;
 
 const money = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 });
+const quantity = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 3 });
 const date = new Intl.DateTimeFormat("es-MX", { dateStyle: "medium" });
 
 const ESTADO_LABEL: Record<string, string> = {
@@ -40,6 +41,10 @@ const FUENTE_SAP_LABEL: Record<string, string> = {
   "RE+partida": "Registro FI + partida"
 };
 const PAGO_SAP_LABEL: Record<string, string> = { pagada: "Pagada", pendiente: "Pendiente" };
+const TIPO_MATCH_SAP_LABEL: Record<string, string> = {
+  exacto: "Coincidencia correcta",
+  numerico: "Coincidencia correcta"
+};
 const CONFIANZA_MSEG_LABEL: Record<string, string> = {
   Alta: "Confirmada (folio + importe)",
   Media: "Referenciada (importe sin reconciliar)"
@@ -233,7 +238,7 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
     <FiltersSidebar
       activeCount={activeFilterCount}
       info={roles.includes("compras") ? <>
-        <p>Compras revisa la evidencia disponible, confirma el CECO y corrige el sitio cuando sea necesario antes de enviar la factura a Gerencia.</p>
+        <p>Compras revisa la evidencia disponible, confirma el CECO y corrige el centro cuando sea necesario antes de enviar la factura a Gerencia.</p>
         <h3>Antes de enviar</h3>
         <ul>
           <li>El CECO es obligatorio; las sugerencias son editables.</li>
@@ -244,7 +249,7 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
         <p>Gerencia recibe las facturas ya revisadas por Compras para aprobarlas o rechazarlas con su contexto operativo.</p>
         <h3>Cómo decidir</h3>
         <ul>
-          <li>Comprueba el CECO, el sitio y la validación de Compras.</li>
+          <li>Comprueba el CECO, el centro y la validación de Compras.</li>
           <li>El comentario es opcional al aprobar y obligatorio al rechazar.</li>
         </ul>
       </>}
@@ -258,7 +263,7 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
       <label>Hasta<input type="date" value={filters.fecha_hasta || ""} onChange={(e) => setFilters({ ...filters, fecha_hasta: e.target.value || null })} /></label>
       <label>Proveedor<select value={filters.proveedor_id || ""} onChange={(e) => setFilters({ ...filters, proveedor_id: e.target.value || null })}><option value="">Todos</option>{proveedores.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select></label>
       <label>Estado SAP<select value={filters.estado_sap || ""} onChange={(e) => setFilters({ ...filters, estado_sap: (e.target.value || null) as AprobacionFiltros["estado_sap"] })}><option value="">Todos</option><option value="validada_sap">Validada</option><option value="sin_match_sap">Sin match</option></select></label>
-      <label>Sitio<select value={filters.sitio || "all"} onChange={(e) => setFilters({ ...filters, sitio: e.target.value as AprobacionFiltros["sitio"] })}><option value="all">Todos</option><option value="with_site">Con sitio</option><option value="without_site">Sin sitio</option></select></label>
+      <label>Centro<select value={filters.sitio || "all"} onChange={(e) => setFilters({ ...filters, sitio: e.target.value as AprobacionFiltros["sitio"] })}><option value="all">Todos</option><option value="with_site">Con centro</option><option value="without_site">Sin centro</option></select></label>
       <label>Recepción MSEG<select value={filters.confianza_mseg || ""} onChange={(e) => setFilters({ ...filters, confianza_mseg: (e.target.value || null) as AprobacionFiltros["confianza_mseg"] })}><option value="">Todas</option><option value="Alta">Alta</option><option value="Media">Media</option><option value="sin_evidencia">Sin evidencia</option></select></label>
       <div className="filters-sidebar-actions"><button className="hydro-button" disabled={busy} onClick={() => refreshAll()} type="button">{busy ? "Actualizando…" : "Aplicar filtros"}</button><button className="hydro-link-button" onClick={() => { setFilters({}); refreshAll({}); }} type="button">Restablecer</button></div>
     </FiltersSidebar>
@@ -267,24 +272,31 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
       {roles.map((r) => <button className={role === r ? "is-active" : ""} key={r} onClick={() => { setRole(r); setSelected(null); setError(null); }} type="button"><span>{TAB_LABEL[r]}</span><b>{r === "compras" ? compras.total : r === "gerencia" ? gerencia.total : historial.total}</b></button>)}
     </section> : null}
 
-    <section className="approval-kpis" aria-label="Indicadores de la cola">
-      <div><span>Pendientes</span><strong>{queue.total}</strong></div>
-      <div><span>Importe gas</span><strong>{formatMoney(queue.resumen.importe_gas_total)}</strong></div>
-      {role === "gerencia"
-        ? <div><span>Pendientes de aprobar</span><strong>{queue.total}</strong></div>
-        : <div title={`${queue.resumen.validadas_sap} de ${queue.total} casan con SAP`}><span>Validado SAP</span><strong>{pctValidadoSap}%</strong></div>}
-      <div title={`${queue.resumen.con_mseg} de ${queue.total} con recepción MSEG`}><span>Con evidencia MSEG</span><strong>{pctConMseg}%</strong></div>
-    </section>
+    <header className="operational-summary">
+      <div className="operational-summary-title">
+        <p>{role === "compras" ? "Validación operativa" : role === "gerencia" ? "Control y decisión" : "Trazabilidad"}</p>
+        <h1>{role === "compras" ? "Portal de Compras" : role === "gerencia" ? "Aprobación de Gerencia" : "Historial de Aprobaciones"}</h1>
+        <span>{role === "compras" ? "Revisión de CECO, centro y evidencias antes de enviar a Gerencia." : role === "gerencia" ? "Decisión final sobre las facturas validadas por el equipo de Compras." : "Consulta y seguimiento de las decisiones realizadas sobre cada factura."}</span>
+      </div>
+      <section className="approval-kpis" aria-label="Indicadores de la cola">
+        <div><span>Pendientes</span><strong>{queue.total}</strong></div>
+        <div><span>Importe gas</span><strong>{formatMoney(queue.resumen.importe_gas_total)}</strong></div>
+        {role === "gerencia"
+          ? <div><span>Pendientes de aprobar</span><strong>{queue.total}</strong></div>
+          : <div title={`${queue.resumen.validadas_sap} de ${queue.total} casan con SAP`}><span>Validado SAP</span><strong>{pctValidadoSap}%</strong></div>}
+        <div title={`${queue.resumen.con_mseg} de ${queue.total} con recepción MSEG`}><span>Con evidencia MSEG</span><strong>{pctConMseg}%</strong></div>
+      </section>
+    </header>
 
     {error ? <p className="approval-error" role="alert">{error}</p> : null}
     <section className="approval-content">
       <div className="approval-table-area">
         <div className="approval-table-heading"><div><p>{role === "compras" ? "Revisión operativa" : role === "gerencia" ? "Decisión de Gerencia" : "Historial (editar o reabrir)"}</p><h2>{role === "compras" ? "Facturas pendientes de validar" : role === "gerencia" ? "Facturas listas para aprobar" : "Facturas ya avanzadas"}</h2></div></div>
-        <div className="approval-table-wrap"><table><thead><tr><th>Fecha</th><th>Proveedor</th><th>Folio</th><th>Importe gas</th><th>CECO</th><th>Sitio</th>{role !== "gerencia" ? <th>SAP</th> : null}<th>MSEG</th>{role === "historial" ? <th>Estado</th> : null}</tr></thead><tbody>
+        <div className="approval-table-wrap">{rows.length || busy ? <table><thead><tr><th>Fecha</th><th>Proveedor</th><th>Folio</th><th>Importe gas</th><th>CECO</th><th>Centro</th>{role !== "gerencia" ? <th>SAP</th> : null}<th>MSEG</th>{role === "historial" ? <th>Estado</th> : null}</tr></thead><tbody>
           {rows.map((row) => {
             const cecoInfo = row.ceco ? cecoLabel(row.ceco, cecoNombrePorId) : cecoLabel(row.ceco_sugerido, cecoNombrePorId);
             return <tr aria-label={`Revisar factura ${row.serie || ""}${row.folio || row.uuid}`} className={selected?.uuid === row.uuid ? "is-selected" : ""} key={row.uuid} onClick={() => choose(row)} role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); choose(row); } }}>
-              <td>{formatDate(row.fecha)}</td><td>{row.proveedor}</td><td>{row.serie || ""}{row.folio || "—"}</td><td>{formatMoney(row.importe_gas)}</td>
+              <td>{formatDate(row.fecha)}</td><td title={row.proveedor}>{row.proveedor}</td><td>{row.serie || ""}{row.folio || "—"}</td><td>{formatMoney(row.importe_gas)}</td>
               <td>{cecoInfo ? <span className={`approval-truncate${row.ceco ? "" : " approval-ceco-sugerido"}`} title={cecoInfo.completo}>{cecoInfo.corto}</span> : "Pendiente"}</td>
               <td>{row.werks_manual || row.sitio_consumo || row.werks || "—"}</td>
               {role !== "gerencia" ? <td>{row.estado_sap ? <span className={`approval-sap-tag${row.estado_sap === "validada_sap" ? " is-ok" : " is-warn"}`}>{row.estado_sap === "validada_sap" ? "Validada" : "Sin match"}</span> : "—"}</td> : null}
@@ -292,26 +304,42 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
               {role === "historial" ? <td>{ESTADO_LABEL[row.estado] || row.estado}</td> : null}
             </tr>;
           })}
-        </tbody></table>{!rows.length && !busy ? <div className="approval-empty"><b>No hay facturas en esta bandeja</b><span>{activeFilterCount ? "Prueba con otros filtros o elimina la búsqueda." : "No tienes decisiones pendientes en este momento."}</span></div> : null}</div>
-        <div className="hydro-pagination"><button disabled={busy || queue.page <= 1} onClick={() => changePage(queue.page - 1)} type="button">Anterior</button><span>Página {queue.page} de {pages}</span><button disabled={busy || queue.page >= pages} onClick={() => changePage(queue.page + 1)} type="button">Siguiente</button></div>
+        </tbody></table> : null}{!rows.length && !busy ? <div className="approval-empty"><span aria-hidden="true" className="approval-empty-icon">✓</span><b>No hay facturas en esta bandeja</b><span>{activeFilterCount ? "Prueba con otros filtros o elimina la búsqueda." : "No tienes decisiones pendientes en este momento."}</span></div> : null}</div>
+        {rows.length ? <div className="hydro-pagination"><button disabled={busy || queue.page <= 1} onClick={() => changePage(queue.page - 1)} type="button">Anterior</button><span>Página {queue.page} de {pages}</span><button disabled={busy || queue.page >= pages} onClick={() => changePage(queue.page + 1)} type="button">Siguiente</button></div> : null}
       </div>
 
       {selected ? <button aria-label="Cerrar detalle" className="approval-detail-backdrop" onClick={() => setSelected(null)} type="button" /> : null}
       <aside className={`approval-detail${selected ? " is-open" : ""}`} aria-label="Detalle de aprobación" aria-modal={selected ? "true" : undefined} role={selected ? "dialog" : undefined}>
         {selected ? <>
           <div className="approval-detail-header"><div><p>Factura seleccionada · {ESTADO_LABEL[selected.estado] || selected.estado}</p><h2>{selected.serie || ""}{selected.folio || ""}</h2></div><button aria-label="Cerrar detalle" onClick={() => setSelected(null)} type="button">×</button></div>
+          <div className="approval-decision-summary" aria-label="Resumen para decidir">
+            <div><span>SAP</span><strong className={selected.estado_sap === "validada_sap" ? "is-good" : "is-warning"}>{selected.estado_sap === "validada_sap" ? "Validada" : "Sin match"}</strong></div>
+            <div><span>MSEG</span><strong className={selected.confianza_mseg ? "is-good" : "is-warning"}>{selected.confianza_mseg || "Sin evidencia"}</strong></div>
+            <div><span>CECO</span><strong className={ceco.trim() || selected.ceco ? "is-good" : "is-warning"}>{ceco.trim() || selected.ceco ? "Asignado" : "Pendiente"}</strong></div>
+          </div>
           <dl className="approval-invoice-data"><dt>Proveedor</dt><dd>{selected.proveedor}</dd><dt>Fecha</dt><dd>{formatDate(selected.fecha)}</dd><dt>Importe gas</dt><dd>{formatMoney(selected.importe_gas)}</dd><dt>Clasificación</dt><dd>{selected.es_mixta ? "Mixta" : "Gas"}</dd><dt>Estado SAP</dt><dd>{selected.estado_sap === "validada_sap" ? "Validada SAP" : "Sin match SAP"}</dd></dl>
+
+          <div className="approval-audit approval-cfdi">
+            <p>Información del CFDI</p>
+            <dl>
+              <dt>Concepto principal</dt><dd>{selected.material_principal || "—"}</dd>
+              <dt>Cantidad</dt><dd>{selected.cantidad_principal == null ? "—" : `${quantity.format(selected.cantidad_principal)}${selected.clave_unidad_principal ? ` ${selected.clave_unidad_principal}` : ""}`}</dd>
+              <dt>Claves SAT</dt><dd>{selected.claves_gas?.length ? selected.claves_gas.join(", ") : "—"}</dd>
+              <dt>Líneas de gas</dt><dd>{selected.n_lineas_gas == null ? "—" : `${selected.n_lineas_gas} de ${selected.n_lineas_total ?? selected.n_lineas_gas}`}</dd>
+              <dt>Total del CFDI</dt><dd>{selected.total == null ? "—" : `${money.format(selected.total)} ${selected.moneda || "MXN"}`}</dd>
+            </dl>
+          </div>
 
           {role !== "gerencia" ? <div className="approval-audit approval-sap">
             <p>Evidencia SAP</p>
             <dl>
               <dt>Fuente</dt><dd>{selected.fuente_sap ? (FUENTE_SAP_LABEL[selected.fuente_sap] ?? selected.fuente_sap) : "Sin match SAP"}</dd>
               <dt>Documento SAP</dt><dd>{selected.belnr_sap || "—"}</dd>
-              <dt>Tipo de match</dt><dd>{selected.tipo_match_sap || "—"}</dd>
+              <dt>Coincidencia por folio</dt><dd>{selected.tipo_match_sap ? (TIPO_MATCH_SAP_LABEL[selected.tipo_match_sap] ?? "Coincidencia encontrada") : "—"}</dd>
               <dt>Días de diferencia</dt><dd>{selected.dias_diferencia == null ? "—" : String(selected.dias_diferencia)}</dd>
               <dt>Estado de pago</dt><dd>{selected.estado_pago_sap ? (PAGO_SAP_LABEL[selected.estado_pago_sap] ?? selected.estado_pago_sap) : "Sin dato"}</dd>
               {selected.estado_pago_sap === "pagada" ? <><dt>Fecha de pago</dt><dd>{formatSapDate(selected.fecha_pago_sap)}</dd><dt>Doc. de pago</dt><dd>{selected.belnr_pago_sap || "—"}</dd></> : null}
-              <dt>Sitio (SAP)</dt><dd>{selected.sitio_consumo || "—"}{selected.tipo_match_sitio ? ` · ${selected.tipo_match_sitio}` : ""}</dd>
+              <dt>Centro (SAP)</dt><dd>{selected.sitio_consumo || "—"}{selected.tipo_match_sitio ? ` · ${selected.tipo_match_sitio}` : ""}</dd>
               <dt>Dirección de Consumo</dt><dd>{selected.direccion_sitio || "—"}</dd>
             </dl>
           </div> : null}
@@ -338,17 +366,17 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
                 </>;
               })()}
             </Field>
-            <Field label="Sitio"><input list="approval-sitios" onChange={(event) => setWerks(event.target.value)} placeholder="Opcional" value={werks} /><datalist id="approval-sitios">{sitios.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</datalist></Field>
+            <Field label="Centro"><input list="approval-sitios" onChange={(event) => setWerks(event.target.value)} placeholder="Opcional" value={werks} /><datalist id="approval-sitios">{sitios.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</datalist></Field>
             <Field label="Comentario"><textarea onChange={(event) => setComment(event.target.value)} placeholder="Opcional" value={comment} /></Field>
           </div> : null}
 
-          {soloLectura ? <div className="approval-audit"><p>Validado por Compras</p><dl><dt>CECO</dt><dd>{cecoDD(selected.ceco)}</dd><dt>Sitio</dt><dd>{selected.werks_manual || selected.werks || "—"}</dd><dt>Usuario</dt><dd>{selected.usuario_compras || "—"}</dd><dt>Comentario</dt><dd>{selected.comentario_compras || "—"}</dd></dl><Field label="Comentario"><textarea onChange={(event) => setComment(event.target.value)} placeholder="Opcional al aprobar" value={comment} /></Field></div> : null}
+          {soloLectura ? <div className="approval-audit"><p>Validado por Compras</p><dl><dt>CECO</dt><dd>{cecoDD(selected.ceco)}</dd><dt>Centro</dt><dd>{selected.werks_manual || selected.werks || "—"}</dd><dt>Usuario</dt><dd>{selected.usuario_compras || "—"}</dd><dt>Comentario</dt><dd>{selected.comentario_compras || "—"}</dd></dl><Field label="Comentario"><textarea onChange={(event) => setComment(event.target.value)} placeholder="Opcional al aprobar" value={comment} /></Field></div> : null}
 
           {puedeReabrir ? <div className="approval-audit">
             <p>{selected.estado === "aprobada" ? "Aprobada por Gerencia" : "Rechazada"}</p>
             <dl>
               <dt>CECO</dt><dd>{cecoDD(selected.ceco)}</dd>
-              <dt>Sitio</dt><dd>{selected.werks_manual || selected.werks || "—"}</dd>
+              <dt>Centro</dt><dd>{selected.werks_manual || selected.werks || "—"}</dd>
               <dt>Compras</dt><dd>{selected.usuario_compras || "—"}</dd>
               <dt>Gerencia</dt><dd>{selected.usuario_gerencia || "—"}</dd>
               {selected.estado === "rechazada" ? <><dt>Motivo de rechazo</dt><dd>{selected.motivo_rechazo || "—"}</dd></> : null}
@@ -359,9 +387,12 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
           {rejecting ? <div className="approval-reject"><p>El comentario será el motivo del rechazo.</p><div><button className="approval-text-button" disabled={busy} onClick={() => setRejecting(false)} type="button">Cancelar</button><button className="approval-reject-button" disabled={busy} onClick={() => submit("rechazar")} type="button">Confirmar rechazo</button></div></div>
           : reopening ? <div className="approval-reject"><p>La factura volverá a &ldquo;Pendiente Compras&rdquo;, sin CECO ni decisión previa.</p><div><button className="approval-text-button" disabled={busy} onClick={() => setReopening(false)} type="button">Cancelar</button><button className="approval-reject-button" disabled={busy} onClick={() => submit("reabrir")} type="button">Confirmar reapertura</button></div></div>
           : <div className="approval-actions">
-              {puedeEditar || soloLectura ? <button className="approval-text-button" disabled={busy} onClick={() => setRejecting(true)} type="button">Rechazar</button> : null}
+              <div className="approval-actions-secondary">
+                {puedeEditar || soloLectura ? <button className="approval-text-button approval-danger-secondary" disabled={busy} onClick={() => setRejecting(true)} type="button">Rechazar</button> : null}
+                {puedeEditar && !ceco.trim() ? <span>Selecciona un CECO para continuar.</span> : null}
+              </div>
               {puedeReabrir ? <button className="approval-text-button" disabled={busy} onClick={() => setReopening(true)} type="button">Reabrir</button> : null}
-              {puedeEditar ? <button className="approval-primary-button" disabled={busy} onClick={() => submit("validar")} type="button">{busy ? "Guardando…" : selected.estado === "pendiente_aprobacion_gerencia" ? "Guardar corrección" : "Enviar a Gerencia"}</button> : null}
+              {puedeEditar ? <button className="approval-primary-button" disabled={busy || !ceco.trim()} onClick={() => submit("validar")} title={!ceco.trim() ? "Selecciona un CECO para continuar" : undefined} type="button">{busy ? "Guardando…" : selected.estado === "pendiente_aprobacion_gerencia" ? "Guardar corrección" : "Enviar a Gerencia"}</button> : null}
               {soloLectura ? <button className="approval-primary-button" disabled={busy} onClick={() => submit("aprobar")} type="button">{busy ? "Guardando…" : "Aprobar factura"}</button> : null}
             </div>}
         </> : <div className="approval-detail-placeholder"><span>Selecciona una factura para revisarla</span></div>}

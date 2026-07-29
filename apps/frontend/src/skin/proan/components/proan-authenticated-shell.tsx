@@ -25,7 +25,7 @@ type ProanAuthenticatedShellProps = {
 
 type NavItem = {
   href: string;
-  key: "hydrocarburos-m1" | "compras" | "gerencia" | "dashboard";
+  key: "manual" | "hydrocarburos-m1" | "compras" | "gerencia" | "dashboard";
   label: string;
 };
 
@@ -72,6 +72,7 @@ export function ProanAuthenticatedShell({
   const homeHref = getHomeHref(features);
   const navItems: NavItem[] = features.hydrocarburos.enabled
     ? [
+        { href: "/manual", key: "manual", label: "Manual de usuario" },
         { href: "/hidrocarburos", key: "hydrocarburos-m1", label: "Clasificación" },
         { href: "/compras", key: "compras", label: "Compras" },
         { href: "/aprobacion", key: "gerencia", label: "Aprobación" },

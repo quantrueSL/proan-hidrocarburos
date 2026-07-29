@@ -233,7 +233,7 @@ const DONUT_C = 2 * Math.PI * DONUT_R;
 // Donut de categorías de ESTADO real (no identidad genérica) -- colores de
 // estado reservados, centro con el total, siempre con leyenda + etiqueta
 // (nunca solo color). Reemplaza la barra de estado horizontal (jul-2026).
-export function Donut({ segments, titulo }: { segments: StatusSegment[]; titulo: string }) {
+export function Donut({ action, segments, titulo }: { action?: React.ReactNode; segments: StatusSegment[]; titulo: string }) {
   const [hover, setHover] = useState<number | null>(null);
   const total = segments.reduce((s, seg) => s + seg.value, 0);
   const visibles = segments.filter((s) => s.value > 0);
@@ -248,7 +248,10 @@ export function Donut({ segments, titulo }: { segments: StatusSegment[]; titulo:
 
   return (
     <div className="dashboard-card">
-      <h3>{titulo}</h3>
+      <div className="dashboard-card-head">
+        <h3>{titulo}</h3>
+        {action}
+      </div>
       {visibles.length ? (
         <div className="dashboard-donut-wrap">
           <svg aria-label={titulo} className="dashboard-donut-svg" role="img" viewBox="0 0 120 120">

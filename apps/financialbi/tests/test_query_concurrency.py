@@ -49,7 +49,7 @@ class QueryConcurrencyTests(unittest.TestCase):
             patch.object(dashboard_engine, "_resumen_estatus", side_effect=result({"total_facturas": 1})),
             patch.object(dashboard_engine, "_gasto_por_proveedor", side_effect=result([{"grupo": "A"}])),
             patch.object(dashboard_engine, "_gasto_por_sitio", side_effect=result([{"grupo": "B"}])),
-            patch.object(dashboard_engine, "_cobertura_ceco_sitio", side_effect=result([{"grupo": "C"}])),
+            patch.object(dashboard_engine, "_gasto_por_ceco", side_effect=result([{"grupo": "C"}])),
             patch.object(dashboard_engine, "_gasto_por_periodo", side_effect=result([{"grupo": "2026-07"}])),
         ):
             result_payload = dashboard_engine.resumen_completo()

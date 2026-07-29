@@ -83,12 +83,12 @@ fuera. ~547 facturas, ~$25.9M, 11 proveedores.
   Gerencia — no hay usuarios ni roles, es texto libre. Vale para probarlo
   internamente, no para un despliegue con varios equipos todavía.
 
-Diseño completo, decisiones y SQL de origen en
-[`Datos/PHASE1/`](./Datos/PHASE1/) (investigación de datos) y
-[`Datos/PHASE2/`](./Datos/PHASE2/) (arquitectura) — **no se distribuyen por
-git** (`Datos/` está en `.gitignore`), solo viven en el entorno de trabajo
-local. El SQL de producto que construye las tablas `HCARB_*` sí está en git,
-en [`ConsultasBigQuery/`](./ConsultasBigQuery/).
+El SQL de producto que construye las tablas `HCARB_*` está en git, en
+[`ConsultasBigQuery/`](./ConsultasBigQuery/) — ahí también el historial de
+bugs corregidos al ejecutarlo contra BigQuery real. Por qué el cruce
+CFDI↔SAP nunca es exacto al 100% (grano distinto entre sistemas, CECO/sitio
+como evidencia y no como dato exacto) en
+[`Datos/naturaleza-de-los-datos.md`](./Datos/naturaleza-de-los-datos.md).
 
 ## Levantar en local (desarrollo)
 
@@ -151,6 +151,7 @@ docker run --rm -v "${PWD}:/w" -w /w ghcr.io/astral-sh/uv:latest uv lock
   `deploy/nginx/ssl/`).
 - **Cloud Run**: el `Dockerfile` del backend y el `Dockerfile.prod` del frontend
   respetan `$PORT`; se despliegan como dos servicios. Las tablas `HCARB_*`
-  que lee el backend se construyen con `ConsultasBigQuery/` (hoy a mano, más
-  adelante orquestado con Airflow — ver `Datos/PHASE2/resumen.md`), no con un
-  Cloud Run Job propio del backend.
+  que lee el backend se construyen con `ConsultasBigQuery/` (hoy a mano; la
+  versión orquestable con Airflow vive en paralelo en `Airflow/`), no con un
+  Cloud Run Job propio del backend. El único Cloud Run Job hoy es
+  `hcarb-estatus-sat` (`Airflow/HCARB_ESTATUS_SAT/`, estatus SAT).

@@ -45,6 +45,7 @@ export function FiltersSidebar({ activeCount, children, info, infoTitle, onToggl
             aria-label={open ? "Colapsar filtros" : "Expandir filtros"}
             className="filters-sidebar-toggle"
             onClick={onToggle}
+            title={open ? "Colapsar filtros" : "Expandir filtros"}
             type="button"
           >
             <span aria-hidden="true" className="filters-sidebar-toggle-arrow" />
@@ -55,6 +56,7 @@ export function FiltersSidebar({ activeCount, children, info, infoTitle, onToggl
             className="filters-sidebar-info"
             onClick={() => setInfoOpen(true)}
             ref={infoButtonRef}
+            title={`Información sobre ${infoTitle}`}
             type="button"
           >
             <span aria-hidden="true">i</span>

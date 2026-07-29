@@ -2,8 +2,8 @@
 
 A diferencia de las tablas HCARB_GOLD_* (recalculadas enteras por ConsultasBigQuery/,
 ver ../../../ConsultasBigQuery/), esta tabla la escribe el backend directamente
-(INSERT/UPDATE) según las acciones de Compras y Gerencia -- diseño completo en
-Datos/PHASE2/Esquema.md §4 y Datos/PHASE2/resumen.md (D23, D27-D29).
+(INSERT/UPDATE) según las acciones de Compras y Gerencia -- esquema completo en
+ConsultasBigQuery/HCARB_gold_aprobacion_schema.sql.
 
 Workflow de dos roles (D23): pendiente_validacion_compras (Compras captura CECO
 y confirma/corrige el sitio) -> pendiente_aprobacion_gerencia (Gerencia
@@ -117,7 +117,9 @@ _SELECT_COLA = """
         a.reabierta_por, a.fecha_reapertura, a.motivo_reapertura,
         f.serie, CAST(f.folio AS STRING) AS folio, DATE(f.fecha) AS fecha,
         f.id_proveedor, COALESCE(v.razon_social, f.emisor_rfc) AS proveedor,
-        f.importe_gas, f.es_mixta,
+        f.importe_gas, f.es_mixta, f.total, f.moneda,
+        f.material_principal, f.cantidad_principal, f.clave_unidad_principal,
+        f.claves_gas, f.n_lineas_gas, f.n_lineas_total,
         -- Evidencia SAP completa (Módulo 2 "consultar a SAP y mostrar"): antes vivía en
         -- una vista M2 aparte de solo lectura; ahora se ve donde Compras valida.
         s.estado_sap, s.fuente_sap, s.werks, s.sitio_consumo, s.direccion_sitio,
@@ -261,13 +263,13 @@ def historial(*, page: int = 1, page_size: int = 50, **filtros: Any) -> dict[str
 
 def catalogo_ceco() -> list[dict[str, Any]]:
     """Sugerencia (D29, no bloqueante) -- snapshot fechado sin pipeline de
-    refresco conocido, ver Datos/PHASE1/hallazgos.md §24 y Esquema.md.
+    refresco conocido.
 
     Acotado a KOKRS='PROA' (area de control de Proan): CSKT no trae sociedad/RFC
     (BUKRS), pero KOKRS parte el maestro en PROA (5.699, Proan), SC01 (4.075,
     otra empresa: retail de alimentos) y PREU (27, vehiculos/activos).
 
-    CORREGIDO jul-2026 (D22 revertida, ver PHASE2/resumen.md): antes traia el
+    CORREGIDO jul-2026 (D22 revertida): antes traia el
     catalogo COMPLETO de PROA (~5.569) porque MSEG solo cubria 1-2 sitios de
     gas -- ya no es el caso (fix de filtro por proveedor, 543/1.056 con
     ceco_sugerido). Acotado a los CECOs que YA aparecieron en datos de gas

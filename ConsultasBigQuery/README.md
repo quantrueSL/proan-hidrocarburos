@@ -1,11 +1,10 @@
 # ConsultasBigQuery
 
 SQL de producto de proan-Hidrocarburos: construye las tablas `HCARB_*` que
-lee la herramienta. No es investigación (eso vive en
-`Datos/PHASE1/queries/` y `Datos/PHASE2/queries/`) — esto se mantiene y se
-re-ejecuta. Diseño completo (por qué, columnas, máquina de estados) en
-[`Datos/PHASE2/resumen.md`](../Datos/PHASE2/resumen.md) y
-[`Datos/PHASE2/Esquema.md`](../Datos/PHASE2/Esquema.md).
+lee la herramienta — esto se mantiene y se re-ejecuta. Por qué el cruce
+CFDI↔SAP nunca es exacto (grano distinto entre sistemas, tolerancias,
+CECO/sitio como evidencia y no como dato exacto) en
+[`Datos/naturaleza-de-los-datos.md`](../Datos/naturaleza-de-los-datos.md).
 
 **Estado actual: ejecutadas y validadas contra BigQuery (jul-2026)**. Al
 ejecutar aparecieron 6 bugs reales que ninguna revisión estática detectó
@@ -68,8 +67,9 @@ base para el Módulo 4. Columnas nuevas: `fuente_sap`
 `fecha_pago_sap`. El techo teórico era 990 (94%) usando RE sin ventana, pero eso
 reabre las colisiones que la ventana corta (solo +35), así que no se toca. El barrido
 completo de `proan-quantrue` que lo motivó — y por qué el **CECO** sigue sin poder
-derivarse (ACDOCA acotado a la sociedad `ETC`, no las del gas; `0FI_GL_14` congelado
-en 2024; sin `EKKN`) está en `Datos/PHASE2/` y en la memoria del proyecto.
+derivarse de forma exacta (ACDOCA acotado a la sociedad `ETC`, no las del gas;
+`0FI_GL_14` congelado en 2024; sin `EKKN`) está en
+[`Datos/naturaleza-de-los-datos.md`](../Datos/naturaleza-de-los-datos.md).
 
 **Dirección de Consumo vía `T001W` (Fase-1-bis, jul-2026):** la Propuesta pide mostrar
 la "Dirección de Consumo" (punto físico de entrega); Fase 1 la dio por inexistente, pero
@@ -98,9 +98,9 @@ recepción consolidada de varias entregas/facturas, así que su importe no
 reconcilia el monto de esta factura en particular). Auditado contra
 BigQuery real (`ZZ_PRUEBAS.hcarb_mseg_scored_try`): 0 UUIDs/documentos
 duplicados, 0 colisiones de folio por proveedor. Corrige también el
-hallazgo "~98% sin MSEG" de Fase 1 (ver `Datos/PHASE1/hallazgos.md` y
-`Esquema.md`, corregidos con addendum) — era un artefacto del filtro de
-material, no un techo estructural de los datos.
+hallazgo "~98% sin MSEG" de la investigación original de Fase 1 (retirada,
+ver historial de git) — era un artefacto del filtro de material, no un
+techo estructural de los datos.
 
 **CECO sugerido (jul-2026, revierte D22): 51% de las facturas.** Se midió que
 solo 201/505 documentos MSEG traen un `KOSTL` único y limpio (la mitad reparte
@@ -127,8 +127,7 @@ previo era un artefacto de cobertura temporal, no un techo de matching real),
 `validada_sap` 90,4%→91,0%, `con_sitio` 70,4% (antes ~58%, medido sobre el
 histórico completo con peor cobertura SAP). Huérfanos pre-2026 en las tablas
 mutables `HCARB_gold_aprobacion` (509 filas, ninguna ya `aprobada`/`rechazada`)
-y `HCARB_ESTATUS_SAT` (506 filas) se borraron con `DELETE` explícito. Detalle
-completo en `Datos/PHASE2/resumen.md` D31.
+y `HCARB_ESTATUS_SAT` (506 filas) se borraron con `DELETE` explícito.
 
 ## Datasets (reutilizados, ninguno nuevo)
 
@@ -177,6 +176,3 @@ es reutilizable sin leer Python:
 
 `linaje-tablas.png` ya las incluye (subgrafo "Tablas mutables", con flechas
 punteadas para distinguirlas de las tablas que sí construye una query).
-
-Detalle narrativo adicional (no versionado en git) en
-`Datos/PHASE2/Esquema.md` §4-5.

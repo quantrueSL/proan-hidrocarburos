@@ -29,6 +29,7 @@ from financialbi.aprobacion_engine import (
     reabrir as reabrir_aprobacion,
     rechazar as rechazar_aprobacion,
 )
+from financialbi.dashboard_engine import facturas_sat_atencion as dashboard_facturas_sat_atencion
 from financialbi.dashboard_engine import resumen_completo as dashboard_resumen_completo
 from financialbi.estatus_sat import ensure_schema as ensure_estatus_sat_schema
 
@@ -89,11 +90,12 @@ class DashboardFiltros(BaseModel):
     estado_sap: Literal["validada_sap", "sin_match_sap"] | None = None
     confianza_mseg: Literal["Alta", "Media", "sin_evidencia"] | None = None
     estatus_sat: Literal["vigente", "cancelado", "sin_confirmar"] | None = None
+    detalle_sat: bool = False
 
 
 class CapturarCompraBody(BaseModel):
     # Identidad de usuario (D27): texto libre por ahora -- no hay login con
-    # roles reales todavía, ver Datos/PHASE2/resumen.md.
+    # roles reales todavía.
     usuario: str = Field(min_length=1)
     ceco: str = Field(min_length=1)
     werks_manual: str | None = None
@@ -225,8 +227,8 @@ def financial_aprobacion_cola_gerencia(filtros: AprobacionSearch = Depends()) ->
 def financial_aprobacion_historial(filtros: AprobacionSearch = Depends()) -> dict[str, Any]:
     """Facturas ya avanzadas más allá de la bandeja inicial de Compras
     (pendientes de Gerencia, aprobadas, rechazadas) -- necesario para poder
-    reeditar antes de decidir o reabrir después, ver reversibilidad en
-    Datos/PHASE2/Esquema.md §4."""
+    reeditar antes de decidir o reabrir después (ver la máquina de estados en
+    ConsultasBigQuery/HCARB_gold_aprobacion_schema.sql)."""
     try:
         return _to_jsonable(aprobacion_historial(**filtros.model_dump()))
     except Exception as exc:
@@ -325,7 +327,11 @@ def financial_aprobacion_reabrir(uuid: str, body: ReabrirBody) -> dict[str, Any]
 @app.get("/v1/financialbi/hidrocarburos/dashboard")
 def financial_dashboard(filtros: DashboardFiltros = Depends()) -> dict[str, Any]:
     try:
-        return _to_jsonable(dashboard_resumen_completo(**filtros.model_dump()))
+        values = filtros.model_dump()
+        detalle_sat = values.pop("detalle_sat")
+        if detalle_sat:
+            return _to_jsonable(dashboard_facturas_sat_atencion(**values))
+        return _to_jsonable(dashboard_resumen_completo(**values))
     except Exception as exc:
         log.exception("dashboard error")
         raise HTTPException(status_code=500, detail=str(exc))
