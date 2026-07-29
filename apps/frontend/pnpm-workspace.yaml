@@ -1,4 +1,20 @@
-allowBuilds:
-  es5-ext: set this to true or false
-  esbuild: set this to true or false
-  unrs-resolver: set this to true or false
+# Scripts de instalacion (postinstall y similares) de las dependencias.
+#
+# pnpm 10 no los ejecuta por defecto: son codigo arbitrario corriendo al instalar
+# una dependencia, y es una via clasica de ataque a la cadena de suministro.
+#
+# Estos cuatro se declaran ignorados a proposito. Comprobado que nada los
+# necesita: vitest, la lectura de Firestore y la imagen de desarrollo funcionan
+# con los scripts sin ejecutar.
+#   esbuild        el binario de plataforma lo instala pnpm como paquete aparte
+#   protobufjs     tarea menor de instalacion; firebase-admin funciona sin ella
+#   @firebase/util idem
+#   unrs-resolver  resolvedor nativo de la config de ESLint (lo unico no
+#                  verificado aqui, porque el lint no se ejecuta en este flujo)
+#
+# Si algun dia hiciera falta alguno, se mueve a onlyBuiltDependencies.
+ignoredBuiltDependencies:
+  - "@firebase/util"
+  - esbuild
+  - protobufjs
+  - unrs-resolver

@@ -1,4 +1,5 @@
 import { requireSession } from "@/lib/auth/session";
+import { canDecidirFacturas } from "@/lib/auth/roles";
 import {
   getAprobacionCatalogCeco,
   getAprobacionCatalogSitios,
@@ -35,5 +36,5 @@ export default async function ComprasPage() {
     error = cause instanceof Error ? cause.message : "No se pudo preparar el portal de compras.";
   }
 
-  return <AprobacionWorkspace cecos={cecos.rows} initialError={error} initialCompras={compras} initialGerencia={EMPTY_APROBACION_QUEUE} initialHistorial={historial} sitios={sitios.rows} proveedores={filtrosCatalog.proveedores} ultimaActualizacion={filtrosCatalog.ultima_actualizacion} usuario={session.email} roles={["compras", "historial"]} />;
+  return <AprobacionWorkspace cecos={cecos.rows} initialError={error} initialCompras={compras} initialGerencia={EMPTY_APROBACION_QUEUE} initialHistorial={historial} sitios={sitios.rows} proveedores={filtrosCatalog.proveedores} ultimaActualizacion={filtrosCatalog.ultima_actualizacion} puedeRechazar={canDecidirFacturas(session)} roles={["compras", "historial"]} />;
 }

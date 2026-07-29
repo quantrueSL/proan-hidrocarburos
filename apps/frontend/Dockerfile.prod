@@ -10,7 +10,7 @@ FROM node:20-alpine AS deps
 WORKDIR /app/apps/frontend
 RUN corepack enable
 COPY apps/frontend/package.json apps/frontend/pnpm-lock.yaml ./
-RUN corepack pnpm install --no-frozen-lockfile
+RUN corepack pnpm install --frozen-lockfile
 
 FROM node:20-alpine AS builder
 WORKDIR /app/apps/frontend

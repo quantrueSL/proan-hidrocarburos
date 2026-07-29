@@ -9,14 +9,6 @@ export interface ClientBranding {
   loginTitle: string;
 }
 
-export interface ProfileConfig {
-  enabled: boolean;
-  instructions: boolean;
-  accessibleSchemas: boolean;
-  persistentDocuments: boolean;
-  documentPreview: boolean;
-}
-
 // ---------------------------------------------------------------------------
 // Top-level client config
 // ---------------------------------------------------------------------------
@@ -26,7 +18,6 @@ export interface ClientConfig {
   branding: ClientBranding;
   features: {
     hydrocarburos: { enabled: boolean };
-    profile: ProfileConfig;
   };
 }
 
@@ -44,13 +35,6 @@ export const clientConfig: ClientConfig = {
   },
   features: {
     hydrocarburos: { enabled: true },
-    profile: {
-      enabled: true,
-      instructions: false,
-      accessibleSchemas: false,
-      persistentDocuments: false,
-      documentPreview: false
-    },
   },
 };
 

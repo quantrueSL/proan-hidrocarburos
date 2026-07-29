@@ -1,3 +1,0 @@
-# Coloca aquí los certificados TLS de producción (crt + key).
-# Se montan en /etc/ssl dentro del contenedor nginx (ver docker-compose.prod.yml).
-# No subir certificados/keys reales al repo.

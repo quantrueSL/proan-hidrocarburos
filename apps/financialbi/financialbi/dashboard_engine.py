@@ -27,7 +27,7 @@ from typing import Any
 from google.cloud import bigquery
 
 from financialbi.aprobacion_engine import _CECO_CATALOGO
-from financialbi.db import _get_bq_client
+from financialbi.db import get_bq_client
 from financialbi.hidrocarburos_engine import _FOLIO, _SAP, _VENDORS
 
 _APROBACION = "`proan-quantrue.D60_REPORTING.HCARB_gold_aprobacion`"
@@ -76,7 +76,7 @@ def _construir_filtro(
 
 def _rows(query: str, params: list[bigquery.ScalarQueryParameter] | None = None) -> list[dict[str, Any]]:
     job_config = bigquery.QueryJobConfig(query_parameters=params or [])
-    result = _get_bq_client().query(query, job_config=job_config).result()
+    result = get_bq_client().query(query, job_config=job_config).result()
     return [dict(row.items()) for row in result]
 
 

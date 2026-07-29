@@ -9,9 +9,6 @@ import numpy as np
 import pandas as pd
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel, Field
-# NOTA: pymssql (backend Azure SQL) se importa de forma perezosa dentro de
-# db.py solo cuando FINANCIALBI_DB_BACKEND=azure. En Hidrocarburos el backend
-# es siempre BigQuery, así que ni se instala ni se importa aquí.
 
 from financialbi.hidrocarburos_engine import catalog as hidrocarburos_catalog
 from financialbi.hidrocarburos_engine import detail as hidrocarburos_detail

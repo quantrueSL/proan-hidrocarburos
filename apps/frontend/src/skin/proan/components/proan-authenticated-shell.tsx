@@ -7,8 +7,8 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { LogoutButton } from "@/components/logout-button";
 import { ProfilePanel } from "@/components/profile-panel";
+import { canAccessAprobacion } from "@/lib/auth/roles";
 import type { FrontendSession } from "@/types/auth";
-import type { UserRead } from "@/types/gateway";
 import { proanBranding } from "@/skin/proan/branding";
 import proanIcon from "@/skin/proan/assets/logos/iconoproan.png";
 
@@ -18,7 +18,6 @@ type ShellFeatures = {
 
 type ProanAuthenticatedShellProps = {
   children: ReactNode;
-  currentUser: UserRead | null;
   features: ShellFeatures;
   session: FrontendSession;
 };
@@ -57,7 +56,6 @@ function getHomeHref(features: ShellFeatures): string {
 
 export function ProanAuthenticatedShell({
   children,
-  currentUser,
   features,
   session
 }: ProanAuthenticatedShellProps) {
@@ -70,12 +68,16 @@ export function ProanAuthenticatedShell({
   }, [pathname]);
 
   const homeHref = getHomeHref(features);
+  // Aprobación solo para gerencia (LOGIN.md §3). Ocultarla es la capa cosmética;
+  // la ruta y los endpoints se bloquean aparte en el servidor.
   const navItems: NavItem[] = features.hydrocarburos.enabled
     ? [
         { href: "/manual", key: "manual", label: "Manual de usuario" },
         { href: "/hidrocarburos", key: "hydrocarburos-m1", label: "Clasificación" },
         { href: "/compras", key: "compras", label: "Compras" },
-        { href: "/aprobacion", key: "gerencia", label: "Aprobación" },
+        ...(canAccessAprobacion(session)
+          ? [{ href: "/aprobacion", key: "gerencia", label: "Aprobación" } as NavItem]
+          : []),
         { href: "/dashboard", key: "dashboard", label: "Dashboard" }
       ]
     : [];
@@ -155,11 +157,10 @@ export function ProanAuthenticatedShell({
       </div>
 
       <ProfilePanel
-        apps={session.apps}
         email={session.email}
-        initialUser={currentUser}
         isOpen={isProfileOpen}
         onClose={() => setIsProfileOpen(false)}
+        role={session.role}
       />
     </>
   );

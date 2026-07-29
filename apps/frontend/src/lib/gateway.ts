@@ -1,6 +1,5 @@
 import { getFinancialbiServiceUrl } from "@/lib/env";
 import type { FrontendSession } from "@/types/auth";
-import type { UserRead } from "@/types/gateway";
 import type {
   HydrocarburosCatalog,
   HydrocarburosFilters,
@@ -59,57 +58,6 @@ async function financialbiFetchJson<T>(
   }
 
   return payload as T;
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// Usuario / sesión
-//
-// No hay servicio de usuarios propio todavía (se quitó apps/auth + el
-// almacén de usuarios de apps/gateway). El usuario se sintetiza a partir
-// del JWT/sesión de login. Sustituir por persistencia real cuando se
-// decida el mecanismo de login definitivo de este repo.
-// ─────────────────────────────────────────────────────────────────────────
-
-export async function ensureGatewayUser(input: {
-  token: string;
-  email: string;
-  displayName?: string | null;
-}): Promise<UserRead> {
-  return {
-    user_id: input.email,
-    email: input.email,
-    display_name: input.displayName ?? input.email,
-    role: "user",
-    user_instructions: null,
-    created_at: new Date(0).toISOString()
-  };
-}
-
-export async function getCurrentUser(session: FrontendSession): Promise<UserRead> {
-  return {
-    user_id: session.gatewayUserId,
-    email: session.email,
-    display_name: session.displayName,
-    role: "user",
-    user_instructions: null,
-    created_at: new Date(0).toISOString()
-  };
-}
-
-export async function updateCurrentUserInstructions(
-  session: FrontendSession,
-  userInstructions: string | null
-): Promise<UserRead> {
-  // Placeholder sin persistencia: la sección "Instrucciones del agente" del
-  // perfil está desactivada en client.config.ts (features.profile.instructions).
-  return {
-    user_id: session.gatewayUserId,
-    email: session.email,
-    display_name: session.displayName,
-    role: "user",
-    user_instructions: userInstructions,
-    created_at: new Date(0).toISOString()
-  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────

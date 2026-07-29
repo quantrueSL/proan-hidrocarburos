@@ -95,6 +95,9 @@ export async function POST(request: Request) {
     gatewayUserId: username,
     apps: ["financialbi"],
     subject: username,
+    // Decisión (LOGIN.md §2.7): el .htpasswd es la vía de Quantrue y de
+    // administración, así que implica acceso total.
+    role: "gerencia",
     expiresAt
   });
 

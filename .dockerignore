@@ -12,4 +12,3 @@
 # Secretos: nunca hornear en la imagen (se montan en runtime).
 .env
 config/bq_credentials.json
-deploy/nginx/ssl

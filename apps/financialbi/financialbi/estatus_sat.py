@@ -37,7 +37,7 @@ from typing import Any
 import requests
 from google.cloud import bigquery
 
-from financialbi.db import _get_bq_client
+from financialbi.db import get_bq_client
 from financialbi.hidrocarburos_engine import _FOLIO
 
 log = logging.getLogger(__name__)
@@ -79,7 +79,7 @@ _ESTADO_MAP = {"vigente": "vigente", "cancelado": "cancelado"}
 
 def ensure_schema() -> None:
     """Crea HCARB_ESTATUS_SAT si no existe. Idempotente."""
-    _get_bq_client().query(_SCHEMA_DDL).result()
+    get_bq_client().query(_SCHEMA_DDL).result()
 
 
 def _local(tag: str) -> str:
@@ -136,7 +136,7 @@ def _candidatos(limite: int | None = None) -> list[dict[str, Any]]:
     """
     params = [bigquery.ScalarQueryParameter("limite", "INT64", limite)] if limite else []
     job_config = bigquery.QueryJobConfig(query_parameters=params)
-    result = _get_bq_client().query(query, job_config=job_config).result()
+    result = get_bq_client().query(query, job_config=job_config).result()
     return [dict(row.items()) for row in result]
 
 
@@ -168,7 +168,7 @@ def _guardar(resultado: dict[str, Any]) -> None:
         bigquery.ScalarQueryParameter("es_cancelable", "STRING", resultado.get("es_cancelable")),
         bigquery.ScalarQueryParameter("estatus_cancelacion_sat", "STRING", resultado.get("estatus_cancelacion_sat")),
     ]
-    _get_bq_client().query(query, job_config=bigquery.QueryJobConfig(query_parameters=params)).result()
+    get_bq_client().query(query, job_config=bigquery.QueryJobConfig(query_parameters=params)).result()
 
 
 def run(limite: int | None = None) -> dict[str, int]:

@@ -108,10 +108,6 @@ Requisitos: Docker Desktop. Desde la **raíz del repo**:
 
 3. Abre **http://localhost:8080** e inicia sesión:
 
-   | usuario | contraseña     |
-   |---------|----------------|
-   | `admin` | `carburos2026` |
-
 Se levantan **3 contenedores**: `carb-nginx-dev`, `carb-frontend-dev`,
 `carb-financialbi-dev`. Sin volúmenes con nombre (solo bind-mounts).
 
@@ -146,12 +142,22 @@ docker run --rm -v "${PWD}:/w" -w /w ghcr.io/astral-sh/uv:latest uv lock
 
 ## Producción / despliegue
 
-- **VM clásica**: `docker compose -f deploy/docker-compose.prod.yml up --build -d`
-  (nginx con TLS — ajusta `deploy/nginx/nginx.prod.conf` y pon los certs en
-  `deploy/nginx/ssl/`).
-- **Cloud Run**: el `Dockerfile` del backend y el `Dockerfile.prod` del frontend
-  respetan `$PORT`; se despliegan como dos servicios. Las tablas `HCARB_*`
-  que lee el backend se construyen con `ConsultasBigQuery/` (hoy a mano; la
-  versión orquestable con Airflow vive en paralelo en `Airflow/`), no con un
-  Cloud Run Job propio del backend. El único Cloud Run Job hoy es
-  `hcarb-estatus-sat` (`Airflow/HCARB_ESTATUS_SAT/`, estatus SAT).
+**Cloud Run**, con `bash deploy/cloudrun/deploy.sh`. Ver
+[deploy/cloudrun/README.md](deploy/cloudrun/README.md) para la preparación
+(secretos) y el detalle.
+
+Es **un solo servicio con dos contenedores**: el frontend Next.js como entrada y
+`financialbi` como sidecar en `localhost:8091`. El backend no tiene URL pública,
+así que no hay autenticación entre servicios que mantener, y
+`FINANCIALBI_SERVICE_URL` sigue apuntando a localhost igual que en desarrollo.
+No hay nginx: Cloud Run termina el TLS y enruta.
+
+Las tablas `HCARB_*` que lee el backend se construyen con `ConsultasBigQuery/`
+(hoy a mano; la versión orquestable con Airflow vive en paralelo en `Airflow/`),
+no con un Cloud Run Job propio del backend. El único Cloud Run Job hoy es
+`hcarb-estatus-sat` (`Airflow/HCARB_ESTATUS_SAT/`, estatus SAT).
+
+El despliegue en VM con `docker-compose.prod.yml` y nginx/TLS se retiró en
+jul-2026: era herencia del repositorio del que se recicló el proyecto y describía
+una máquina que no existe. `deploy/docker-compose.dev.yml` sigue siendo el entorno
+de desarrollo.

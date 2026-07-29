@@ -14,7 +14,10 @@ type Props = {
   sitios: AprobacionOption[];
   proveedores: AprobacionOption[];
   ultimaActualizacion?: string | null;
-  usuario: string;
+  // Aceptar/rechazar facturas es exclusivo de gerencia (LOGIN.md §3). El botón
+  // Rechazar aparece también en Compras, así que se decide desde el servidor y
+  // se pasa como capacidad, no como rol.
+  puedeRechazar: boolean;
   // Qué bandejas muestra esta instancia. M2 (Portal de Compras) = compras+historial;
   // M3 (Aprobación) = gerencia. La primera de la lista es la pestaña inicial.
   roles?: Role[];
@@ -120,7 +123,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <label className="approval-field"><span>{label}</span>{children}</label>;
 }
 
-export function AprobacionWorkspace({ cecos, initialCompras, initialError, initialGerencia, initialHistorial, sitios, proveedores, ultimaActualizacion, usuario, roles = ["compras", "gerencia", "historial"] }: Props) {
+export function AprobacionWorkspace({ cecos, initialCompras, initialError, initialGerencia, initialHistorial, sitios, proveedores, ultimaActualizacion, puedeRechazar, roles = ["compras", "gerencia", "historial"] }: Props) {
   const [role, setRole] = useState<Role>(roles[0]);
   const [compras, setCompras] = useState(initialCompras);
   const [gerencia, setGerencia] = useState(initialGerencia);
@@ -211,11 +214,14 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
       setError(action === "reabrir" ? "Indica el motivo de la reapertura." : "Indica el motivo del rechazo."); return;
     }
     const endpoint = endpointFor(selected.uuid, selected.estado, action);
+    // Sin `usuario`: la identidad la pone el servidor desde la sesión firmada
+    // (app/api/.../aprobacion/[...path]/route.ts). El cliente no puede firmar
+    // una decisión con el nombre de otro.
     const payload = action === "validar"
-      ? { usuario, ceco: ceco.trim(), werks_manual: werks.trim() || null, comentario: comment.trim() || null }
+      ? { ceco: ceco.trim(), werks_manual: werks.trim() || null, comentario: comment.trim() || null }
       : action === "aprobar"
-        ? { usuario, comentario: comment.trim() || null }
-        : { usuario, motivo: comment.trim() };
+        ? { comentario: comment.trim() || null }
+        : { motivo: comment.trim() };
     setBusy(true); setError(null);
     try {
       const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -388,7 +394,7 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
           : reopening ? <div className="approval-reject"><p>La factura volverá a &ldquo;Pendiente Compras&rdquo;, sin CECO ni decisión previa.</p><div><button className="approval-text-button" disabled={busy} onClick={() => setReopening(false)} type="button">Cancelar</button><button className="approval-reject-button" disabled={busy} onClick={() => submit("reabrir")} type="button">Confirmar reapertura</button></div></div>
           : <div className="approval-actions">
               <div className="approval-actions-secondary">
-                {puedeEditar || soloLectura ? <button className="approval-text-button approval-danger-secondary" disabled={busy} onClick={() => setRejecting(true)} type="button">Rechazar</button> : null}
+                {(puedeEditar || soloLectura) && puedeRechazar ? <button className="approval-text-button approval-danger-secondary" disabled={busy} onClick={() => setRejecting(true)} type="button">Rechazar</button> : null}
                 {puedeEditar && !ceco.trim() ? <span>Selecciona un CECO para continuar.</span> : null}
               </div>
               {puedeReabrir ? <button className="approval-text-button" disabled={busy} onClick={() => setReopening(true)} type="button">Reabrir</button> : null}

@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from google.cloud import bigquery
 
-from financialbi.db import _get_bq_client
+from financialbi.db import get_bq_client
 
 _FOLIO = "`proan-quantrue.D60_REPORTING.HCARB_GOLD_CLASIFICACION_FOLIO`"
 _SAP = "`proan-quantrue.D60_REPORTING.HCARB_GOLD_VALIDACION_SAP`"
@@ -80,7 +80,7 @@ def _filters(
 
 def _rows(query: str, params: list[bigquery.ScalarQueryParameter]) -> list[dict[str, Any]]:
     job_config = bigquery.QueryJobConfig(query_parameters=params)
-    result = _get_bq_client().query(query, job_config=job_config).result()
+    result = get_bq_client().query(query, job_config=job_config).result()
     return [dict(row.items()) for row in result]
 
 
@@ -116,7 +116,7 @@ def catalog() -> dict[str, Any]:
     rows = _rows(query, [])
     payload = rows[0] if rows else {"fecha_minima": None, "fecha_maxima": None, "proveedores": [], "sitios": [], "claves_sat": []}
     try:
-        payload["ultima_actualizacion"] = _get_bq_client().get_table(_FOLIO.strip("`")).modified
+        payload["ultima_actualizacion"] = get_bq_client().get_table(_FOLIO.strip("`")).modified
     except Exception:
         payload["ultima_actualizacion"] = None
     return payload

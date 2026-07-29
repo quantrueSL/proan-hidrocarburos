@@ -56,6 +56,23 @@ services:
       - HTPASSWD_PATH=/etc/carb/.htpasswd
       - SESSION_COOKIE_NAME=carb_session
       - SESSION_COOKIE_SECURE=false
+      # Firma de la cookie de sesión. En desarrollo vale cualquier cosa; en
+      # producción es obligatorio y va en Secret Manager (ver LOGIN.md).
+      - SESSION_SECRET=carb-dev-session-secret-no-usar-en-produccion
+      # Lectura de la lista de acceso en Firestore (LOGIN.md Capa 1). En Cloud Run
+      # esto lo resuelve la identidad del servicio y no hay ficheros; en local hay
+      # que darle la misma service account que usa el backend.
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/config/bq_credentials.json
+      - GCP_PROJECT=proan-quantrue
+      - FIRESTORE_DATABASE_ID=proan-lista-mails
+      - ACCESS_LIST_ID=hidrocarburos_acceso
+      # Firebase Authentication (LOGIN.md Capa 2) — app web "hidrocarburos-frontend".
+      # Valores públicos por diseño: viajan en el JS del navegador. Sin prefijo
+      # NEXT_PUBLIC_ a propósito: se leen en el servidor y se pasan como props,
+      # para que la misma imagen sirva en cualquier entorno.
+      - FIREBASE_API_KEY=AIzaSyAcchQhwYV2RKGck3GQX6gOAsfdUThlTuc
+      - FIREBASE_AUTH_DOMAIN=proan-quantrue.firebaseapp.com
+      - FIREBASE_APP_ID=1:272166156031:web:efcad44aa693902d50beca
       # Bind mounts en Windows no propagan eventos de fichero → sin polling
       # next dev no recompila los cambios.
       - WATCHPACK_POLLING=true
@@ -67,6 +84,8 @@ services:
       - ../apps/frontend/next.config.mjs:/app/apps/frontend/next.config.mjs
       # Usuarios (bcrypt) — editable en caliente sin rebuild.
       - ./nginx/.htpasswd:/etc/carb/.htpasswd:ro
+      # Service account (la misma que el backend) para leer Firestore.
+      - ../config:/app/config:ro
     networks:
       - carb_net
     restart: unless-stopped

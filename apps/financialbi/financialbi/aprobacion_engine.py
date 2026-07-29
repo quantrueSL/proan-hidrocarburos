@@ -20,7 +20,7 @@ from typing import Any, Literal
 
 from google.cloud import bigquery
 
-from financialbi.db import _get_bq_client
+from financialbi.db import get_bq_client
 from financialbi.hidrocarburos_engine import _FOLIO, _SAP, _VENDORS
 
 _APROBACION_TABLE = "proan-quantrue.D60_REPORTING.HCARB_gold_aprobacion"
@@ -78,13 +78,13 @@ _ESTADO_ORIGEN = {
 def ensure_schema() -> None:
     """Crea HCARB_gold_aprobacion si no existe, y añade las columnas de
     reapertura si faltan (tabla creada antes de que existieran). Idempotente."""
-    client = _get_bq_client()
+    client = get_bq_client()
     client.query(_SCHEMA_DDL).result()
     client.query(_ALTER_ADD_REAPERTURA).result()
 
 
 def _client() -> bigquery.Client:
-    return _get_bq_client()
+    return get_bq_client()
 
 
 def _rows(query: str, params: list[bigquery.ScalarQueryParameter] | None = None) -> list[dict[str, Any]]:

@@ -11,7 +11,7 @@ const workflow = [
     objective: "Localizar y entender la factura",
     href: "/hidrocarburos",
     instructions: [
-      "Acota el periodo y utiliza los filtros de proveedor, sitio, clave SAT o clasificación.",
+      "Acota el periodo y utiliza los filtros de proveedor, centro, clave SAT o clasificación.",
       "Revisa el material, la cantidad, el importe de gas y las claves SAT detectadas.",
       "Abre una fila para consultar el detalle completo de la factura.",
       "En una factura mixta, toma como referencia el importe de los conceptos clasificados como gas."
@@ -21,13 +21,13 @@ const workflow = [
   {
     number: "02",
     title: "Compras",
-    summary: "Comprueba SAP, MSEG, CECO y sitio.",
+    summary: "Comprueba SAP, MSEG, CECO y centro.",
     objective: "Realizar la validación operativa",
     href: "/compras",
     instructions: [
       "Selecciona una factura pendiente y revisa su correspondencia con SAP.",
       "Comprueba la evidencia MSEG, el pedido y la recepción cuando estén disponibles.",
-      "Confirma o corrige el CECO y el sitio; añade un comentario si aporta contexto.",
+      "Confirma o corrige el CECO y el centro; añade un comentario si aporta contexto.",
       "Valida la factura para enviarla a Gerencia o recházala indicando el motivo."
     ],
     check: "Un estado «Sin match» o una evidencia MSEG media requieren una revisión especialmente cuidadosa."
@@ -40,7 +40,7 @@ const workflow = [
     href: "/aprobacion",
     instructions: [
       "Revisa los datos fiscales y la validación realizada por Compras.",
-      "Comprueba el importe de gas, el CECO, el sitio y los comentarios previos.",
+      "Comprueba el importe de gas, el CECO, el centro y los comentarios previos.",
       "Aprueba la factura o recházala dejando una justificación clara.",
       "Utiliza el historial para consultar la trazabilidad y reabrir un caso cuando corresponda."
     ],
@@ -158,7 +158,7 @@ export default function ManualPage() {
           <div className="manual-reconciliation-stats" aria-label="Resultados de conciliación (universo actual: 547 facturas)">
             <div><span>Cobertura SAP</span><strong>91,2%</strong></div>
             <div><span>Confianza MSEG alta</span><strong>81,4%</strong></div>
-            <div><span>Sitio detectado</span><strong>70,4%</strong></div>
+            <div><span>Centro detectado</span><strong>70,4%</strong></div>
             <div className="is-attention"><span>CECO con varias opciones</span><strong>250</strong></div>
           </div>
 
@@ -190,7 +190,7 @@ export default function ManualPage() {
               }}
               type="button"
             >
-              <span><strong>Sitio</strong><small>Planta de consumo</small></span>
+              <span><strong>Centro</strong><small>Planta de consumo</small></span>
               <i aria-hidden="true">↗</i>
             </button>
           </div>
@@ -294,7 +294,7 @@ export default function ManualPage() {
                   <span>Inicio</span><strong>Factura clasificada</strong><small>Lista para revisar</small>
                 </div>
                 <div className="manual-diagram-node is-purchases">
-                  <span>Paso 1</span><strong>Revisión de Compras</strong><small>Comprueba los datos y confirma CECO y sitio</small>
+                  <span>Paso 1</span><strong>Revisión de Compras</strong><small>Comprueba los datos y confirma CECO y centro</small>
                 </div>
                 <div className="manual-diagram-node is-management">
                   <span>Paso 2</span><strong>Revisión de Gerencia</strong><small>Evalúa la información preparada por Compras</small>
@@ -342,7 +342,7 @@ export default function ManualPage() {
                     ? "Cobertura SAP"
                     : reconciliationTopic === "mseg"
                       ? "Confianza MSEG"
-                      : "Sitio detectado"}
+                      : "Centro detectado"}
                 </h2>
                 <span>
                   {reconciliationTopic === "sap"
@@ -398,7 +398,7 @@ export default function ManualPage() {
                     <ol className="manual-reconciliation-steps">
                       <li><strong>Localiza la factura</strong><span>y recupera el pedido relacionado.</span></li>
                       <li><strong>Consulta la recepción</strong><span>para obtener la planta de destino.</span></li>
-                      <li><strong>Propone el sitio</strong><span>y permite que Compras lo corrija si es necesario.</span></li>
+                      <li><strong>Propone el centro</strong><span>y permite que Compras lo corrija si es necesario.</span></li>
                     </ol>
                   </>
                 )}
@@ -414,7 +414,7 @@ export default function ManualPage() {
                     ? "Sin match SAP requiere revisión, pero no bloquea la validación."
                     : reconciliationTopic === "mseg"
                       ? "Una confianza media o sin evidencia requiere revisar el detalle antes de decidir."
-                      : "Si no se detecta el sitio, Compras puede seleccionarlo manualmente."}
+                      : "Si no se detecta el centro, Compras puede seleccionarlo manualmente."}
                 </p>
               </div>
             </footer>

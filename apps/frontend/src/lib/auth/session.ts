@@ -2,22 +2,11 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   getSessionCookieName,
+  getSessionSecret,
   isSecureSessionCookie
 } from "@/lib/env";
+import { signSessionToken, verifySessionToken } from "@/lib/auth/session-token";
 import type { FrontendSession } from "@/types/auth";
-
-function encodeSession(session: FrontendSession): string {
-  return Buffer.from(JSON.stringify(session), "utf8").toString("base64url");
-}
-
-function decodeSession(value: string): FrontendSession | null {
-  try {
-    const decoded = Buffer.from(value, "base64url").toString("utf8");
-    return JSON.parse(decoded) as FrontendSession;
-  } catch {
-    return null;
-  }
-}
 
 export function getSession(): FrontendSession | null {
   const cookieStore = cookies();
@@ -27,7 +16,9 @@ export function getSession(): FrontendSession | null {
     return null;
   }
 
-  return decodeSession(rawValue);
+  // Firma inválida, cookie manipulada o sesión caducada → como si no hubiera
+  // sesión. No se distingue el motivo hacia fuera.
+  return verifySessionToken(rawValue, getSessionSecret());
 }
 
 export function requireSession(): FrontendSession {
@@ -46,7 +37,7 @@ export function setSession(session: FrontendSession): void {
 
   cookieStore.set({
     name: getSessionCookieName(),
-    value: encodeSession(session),
+    value: signSessionToken(session, getSessionSecret()),
     httpOnly: true,
     sameSite: "lax",
     secure: isSecureSessionCookie(),
