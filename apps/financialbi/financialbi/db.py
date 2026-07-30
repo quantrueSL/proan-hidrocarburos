@@ -14,11 +14,6 @@ Los valores SIEMPRE se pasan como parametros de consulta (`@nombre` +
 `bigquery.ScalarQueryParameter`), nunca interpolados en la cadena SQL: eso seria
 una via de inyeccion. En los f-strings de los motores solo va estructura —
 columnas, tabla, ORDER BY — nunca datos que vengan del cliente.
-
-Historia: este modulo soportaba tambien Azure SQL via pymssql, con un conmutador
-FINANCIALBI_DB_BACKEND y funciones `read_sql`/`query_to_records`. Hidrocarburos
-solo usa BigQuery, pymssql ya no es dependencia y ningun motor llamaba a esas
-funciones, asi que se retiro todo (jul-2026).
 """
 
 from __future__ import annotations

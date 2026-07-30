@@ -15,7 +15,7 @@
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
-  name: hidrocarburos
+  name: plataforma-hidrocarburos
 spec:
   template:
     metadata:

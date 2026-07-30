@@ -9,17 +9,22 @@ monorepo (como Maka, pero recortado):
 ```
 apps/financialbi   backend FastAPI (BigQuery)
 apps/frontend      frontend Next.js 14 (Hidrocarburos, estética Proan)
-deploy/            docker-compose (dev/prod) + nginx
+deploy/cloudrun    despliegue de producción (Cloud Run)
+deploy/            docker-compose.dev.yml + nginx (solo desarrollo)
 config/            financialbi.env + bq_credentials.json (BigQuery)
 pyproject.toml     workspace uv (miembro: apps/financialbi) + uv.lock
+LOGIN.md           decisiones y estado del login y los roles
 ```
 
 - **Backend**: endpoints `/v1/financialbi/hidrocarburos/{catalog,summary,invoices/search,invoices/{uuid}}`.
   El código Maka original (reportes/alertas con Gemini) se eliminó — no
   aplicaba a este producto; ver historial de git si hace falta consultarlo.
-- **Frontend**: autenticación por **`.htpasswd`** (bcrypt), verificada dentro del
-  propio Next (sin auth-service ni gateway). **nginx** delante hace solo de
-  reverse-proxy (igual que con el frontend-react de Maka).
+- **Frontend**: dos vías de login que emiten la misma cookie de sesión firmada —
+  **Google** (Firebase Authentication) y **usuario/contraseña** contra
+  `.htpasswd` (bcrypt) —, ambas verificadas dentro del propio Next, sin
+  auth-service ni gateway. Dos roles: `gerencia` y `generico`. Ver
+  [`LOGIN.md`](./LOGIN.md). **nginx** solo interviene en desarrollo, como
+  reverse-proxy; en producción Cloud Run termina el TLS y enruta.
 
 ## Qué hace la herramienta
 
@@ -79,9 +84,9 @@ fuera. ~547 facturas, ~$25.9M, 11 proveedores.
 - El **estatus de cancelación ante el SAT** se comprueba contra el webservice
   público del SAT (no viene en los datos de CFDI) — construido, pero corre a
   mano hasta que exista el DAG de Airflow.
-- **Sin auth real:** cualquiera con acceso puede actuar como Compras o
-  Gerencia — no hay usuarios ni roles, es texto libre. Vale para probarlo
-  internamente, no para un despliegue con varios equipos todavía.
+- **Reabrir una decisión lo puede hacer cualquier rol**, también el genérico: es
+  una decisión explícita, no un olvido. Lo que el rol genérico no puede es
+  aceptar ni rechazar facturas.
 
 El SQL de producto que construye las tablas `HCARB_*` está en git, en
 [`ConsultasBigQuery/`](./ConsultasBigQuery/) — ahí también el historial de
@@ -106,14 +111,33 @@ Requisitos: Docker Desktop. Desde la **raíz del repo**:
    docker compose -f deploy/docker-compose.dev.yml up --build
    ```
 
-3. Abre **http://localhost:8080** e inicia sesión:
+3. Abre **http://localhost:8080** y entra por una de las dos vías:
+
+   - **Entrar con Google**, con una cuenta `@proan.com` que esté en la lista de
+     acceso. El compose de desarrollo ya trae la configuración de Firebase y
+     monta las credenciales de GCP para poder leer esa lista.
+   - **Acceso para desarrolladores** (desplegable al pie del login): usuario y
+     contraseña del `.htpasswd`, siempre con rol `gerencia`.
 
 Se levantan **3 contenedores**: `carb-nginx-dev`, `carb-frontend-dev`,
 `carb-financialbi-dev`. Sin volúmenes con nombre (solo bind-mounts).
 
-## Usuarios (.htpasswd)
+## Usuarios
 
-Viven en `deploy/nginx/.htpasswd` (`usuario:hash-bcrypt`). Para añadir/cambiar:
+Hay dos poblaciones distintas y se gestionan en sitios distintos:
+
+- **Usuarios de la herramienta** (entran con Google): en una lista de Firestore,
+  desde el portal de listas de `proan-DBC/Mailing-lists`. Ahí se les asigna el
+  rol. No requiere desplegar nada.
+- **Acceso técnico** (usuario y contraseña): en el `.htpasswd`, siempre con rol
+  `gerencia`. En producción ese fichero llega desde Secret Manager, ver
+  [`deploy/cloudrun/README.md`](./deploy/cloudrun/README.md).
+
+Detalle de las dos vías, los roles y cómo dar acceso: [`LOGIN.md`](./LOGIN.md).
+
+### .htpasswd en desarrollo
+
+Vive en `deploy/nginx/.htpasswd` (`usuario:hash-bcrypt`). Para añadir/cambiar:
 
 ```bash
 htpasswd -B deploy/nginx/.htpasswd otrousuario        # si tienes apache2-utils
@@ -157,7 +181,3 @@ Las tablas `HCARB_*` que lee el backend se construyen con `ConsultasBigQuery/`
 no con un Cloud Run Job propio del backend. El único Cloud Run Job hoy es
 `hcarb-estatus-sat` (`Airflow/HCARB_ESTATUS_SAT/`, estatus SAT).
 
-El despliegue en VM con `docker-compose.prod.yml` y nginx/TLS se retiró en
-jul-2026: era herencia del repositorio del que se recicló el proyecto y describía
-una máquina que no existe. `deploy/docker-compose.dev.yml` sigue siendo el entorno
-de desarrollo.

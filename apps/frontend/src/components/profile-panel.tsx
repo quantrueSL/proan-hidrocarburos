@@ -2,15 +2,7 @@
 
 import type { SessionRole } from "@/types/auth";
 
-// ─────────────────────────────────────────────────────────────────────────
 // Panel de perfil: quién eres y qué puedes hacer. Nada más.
-//
-// Antes arrastraba tres funciones del monorepo del que se recicló el proyecto
-// —instrucciones del agente, esquemas accesibles y árbol de documentos
-// permanentes con su visor de PDF/DOCX/XLSX—, todas desactivadas por
-// configuración pero cableadas por completo: ~500 líneas, cuatro componentes y
-// dos dependencias (mammoth, xlsx) que nadie ejecutaba. Retirado en jul-2026.
-// ─────────────────────────────────────────────────────────────────────────
 
 type ProfilePanelProps = {
   email: string;

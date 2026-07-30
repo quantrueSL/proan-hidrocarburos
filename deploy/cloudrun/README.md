@@ -1,6 +1,6 @@
 # Despliegue en Cloud Run
 
-Un servicio, `hidrocarburos`, con dos contenedores: el frontend Next.js como
+Un servicio, `plataforma-hidrocarburos`, con dos contenedores: el frontend Next.js como
 entrada y `financialbi` como sidecar en `localhost:8091`. El backend no tiene URL
 pública, así que no hay autenticación entre servicios que mantener.
 
@@ -86,8 +86,6 @@ gestionan en la lista de Firestore desde el portal de listas (ver `LOGIN.md`).
   proyecto. Tiene rol *Editor*, mucho más de lo necesario; queda pendiente crear
   una service account dedicada con permisos mínimos.
 
-## Lo que ya no se usa
-
-`deploy/docker-compose.prod.yml` y `deploy/nginx/nginx.prod.conf` son herencia del
-repositorio del que se recicló este proyecto y describen una VM que no existe. No
-tomarlos como referencia.
+En desarrollo (`deploy/docker-compose.dev.yml`) sí hay nginx delante: da el puerto
+de entrada estable y el `Upgrade` de websockets para el recargado en caliente de
+Next. En producción no hace falta.

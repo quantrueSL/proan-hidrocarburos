@@ -3,11 +3,26 @@
 Este documento recoge decisiones que no deben resolverse con parches locales.
 Se revisará antes del despliegue definitivo.
 
+> **Estado a jul-2026.** Partes de este checklist ya están resueltas o se
+> decidieron de otra forma. Donde haya discrepancia, manda lo que digan:
+>
+> - `LOGIN.md` (raíz) — autenticación, roles y autorización: el apartado 4 de
+>   aquí está **hecho**, salvo el rate limiting.
+> - `deploy/cloudrun/README.md` — despliegue real. En particular, el apartado 1
+>   de aquí queda **superado**: no son dos servicios separados, es **un servicio
+>   con dos contenedores** (el backend como sidecar en `localhost`, sin URL
+>   pública), lo que elimina la necesidad de autenticación entre servicios.
+>
+> Sigue vigente y sin hacer: caché (apartado 2), pipeline y escrituras (3),
+> auditoría (5) y observabilidad (6).
+
 ## 1. Arquitectura de despliegue
 
-- Desplegar frontend Next.js y FinancialBI como servicios privados separados.
-- Permitir que el frontend invoque FinancialBI mediante identidad de servicio,
-  no mediante una URL pública sin autenticación.
+> Superado: ver el aviso de arriba. Se optó por un servicio con sidecar.
+
+- ~~Desplegar frontend Next.js y FinancialBI como servicios privados separados.~~
+- ~~Permitir que el frontend invoque FinancialBI mediante identidad de servicio,
+  no mediante una URL pública sin autenticación.~~
 - Guardar credenciales, claves y configuración sensible en Secret Manager.
 - No incluir `bq_credentials.json` dentro de ninguna imagen.
 - Usar una service account con permisos mínimos sobre las tablas necesarias.
