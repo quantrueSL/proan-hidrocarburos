@@ -7150,6 +7150,17 @@ body.proan-report-assistant-open .proan-content-scroll {
 .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; align-items: start; transition: opacity .15s ease; }
 .dashboard-grid.is-loading { opacity: .55; }
 .dashboard-grid-status { grid-template-columns: repeat(4, minmax(220px, 1fr)); }
+.dashboard-analysis { display: grid; gap: 12px; }
+.dashboard-analysis-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.dashboard-analysis-head h2 { margin: 0; color: #292d2c; font-family: var(--font-proan-primary); font-size: 17px; }
+.dashboard-selection-bar { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 38px; }
+.dashboard-filter-chips { display: flex; flex: 1; flex-wrap: wrap; align-items: center; gap: 7px; color: #777068; font-size: 11px; }
+.dashboard-filter-chips > button { display: inline-flex; align-items: center; gap: 7px; border: 1px solid #d8cec2; border-radius: 999px; background: #fffdf9; padding: 5px 9px 5px 11px; color: #4e4943; font-size: 10px; font-weight: 700; cursor: pointer; }
+.dashboard-filter-chips > button:hover, .dashboard-filter-chips > button:focus-visible { border-color: #3d3d7c; outline: none; }
+.dashboard-filter-chips > button span { color: #918a80; font-size: 14px; line-height: 1; }
+.dashboard-selection-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 12px; }
+.dashboard-selection-actions .hydro-link-button { margin: 0; }
+.dashboard-selection-actions .hydro-button { min-height: 32px; padding: 6px 13px; font-size: 10px; }
 /* Grid 2x2 (jul-2026): evolución, proveedor, sitio, cobertura CECO/sitio --
    el detalle de cada una se ve ampliando con el botón ⤢. */
 .dashboard-grid-2x2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -7178,8 +7189,10 @@ body.proan-report-assistant-open .proan-content-scroll {
 
 /* Barras rankeadas: una sola serie -> un solo tono, nunca colorea por fila. */
 .dashboard-bar-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
-.dashboard-bar-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 90px; grid-template-areas: "label value" "track track"; align-items: center; gap: 2px 8px; font-size: 12px; border-radius: 6px; }
+.dashboard-bar-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 90px; grid-template-areas: "label value" "track track"; align-items: center; gap: 2px 8px; font-size: 12px; border-radius: 6px; cursor: pointer; }
 .dashboard-bar-row:hover, .dashboard-bar-row.is-hover, .dashboard-bar-row:focus-visible { background: rgba(220, 107, 43, .06); outline: none; }
+.dashboard-bar-row.is-selected { background: rgba(61, 61, 124, .1); box-shadow: 0 0 0 1px rgba(61, 61, 124, .22); }
+.dashboard-bar-row.is-selected .dashboard-bar-fill { background: #dc6b2b; }
 .dashboard-bar-label { grid-area: label; overflow: hidden; color: #343735; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .dashboard-bar-value { grid-area: value; color: #292d2c; font-weight: 750; text-align: right; white-space: nowrap; }
 .dashboard-bar-track { grid-area: track; height: 8px; border-radius: 999px; background: #f0e4d8; overflow: hidden; }
@@ -7193,6 +7206,7 @@ body.proan-report-assistant-open .proan-content-scroll {
 .dashboard-trend-line { fill: none; stroke: #3d3d7c; stroke-width: 2; stroke-linejoin: round; }
 .dashboard-trend-dot { fill: #3d3d7c; }
 .dashboard-trend-dot.is-hover { fill: var(--color-primary-hover, #202042); }
+.dashboard-trend-dot.is-selected { fill: #dc6b2b; stroke: #fffdf9; stroke-width: 2; }
 .dashboard-trend-crosshair { stroke: #c9b8a4; stroke-width: 1; stroke-dasharray: 3 3; }
 .dashboard-trend-hits { position: absolute; inset: 0; }
 .dashboard-trend-hit { position: absolute; top: 0; bottom: 0; width: 24px; margin-left: -12px; border: 0; background: none; padding: 0; cursor: pointer; }
@@ -7217,6 +7231,8 @@ body.proan-report-assistant-open .proan-content-scroll {
 .dashboard-donut-svg { width: 132px; height: 132px; }
 .dashboard-donut-track { fill: none; stroke: #f0e4d8; stroke-width: 16; }
 .dashboard-donut-arc { fill: none; stroke-width: 16; cursor: default; transition: opacity .15s ease; }
+.dashboard-donut-arc[role="button"] { cursor: pointer; }
+.dashboard-donut-arc.is-selected { stroke-width: 19; }
 .dashboard-donut-arc:focus-visible { outline: none; }
 .dashboard-donut-arc.is-hover, .dashboard-donut-arc:hover { opacity: .82; }
 .dashboard-donut-arc.tone-good { stroke: var(--color-success, #1e6b4a); }
@@ -7227,13 +7243,21 @@ body.proan-report-assistant-open .proan-content-scroll {
 .dashboard-donut-caption { fill: #918a80; font-size: 9px; font-weight: 700; letter-spacing: .04em; text-anchor: middle; text-transform: uppercase; }
 .dashboard-status-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 12px 0 0; padding: 0; list-style: none; font-size: 11px; color: #6b6258; justify-content: center; }
 .dashboard-status-legend b { color: #292d2c; }
+.dashboard-status-legend button { border: 0; border-radius: 999px; background: none; padding: 3px 5px; color: inherit; font: inherit; cursor: pointer; }
+.dashboard-status-legend button:hover, .dashboard-status-legend button:focus-visible { background: rgba(220, 107, 43, .08); outline: none; }
+.dashboard-status-legend button.is-selected { background: rgba(61, 61, 124, .1); color: #292d2c; }
+.dashboard-status-legend button:disabled { cursor: default; opacity: .45; }
 .dashboard-status-dot { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 999px; vertical-align: middle; }
 .dashboard-status-dot.tone-good { background: var(--color-success, #1e6b4a); }
 .dashboard-status-dot.tone-warning { background: var(--color-warning, #8f4f1a); }
 .dashboard-status-dot.tone-critical { background: var(--color-danger, #a12626); }
 .dashboard-status-dot.tone-neutral { background: #918a80; }
 
-@media (max-width: 900px) { .dashboard-grid-status, .dashboard-grid-2x2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 900px) {
+  .dashboard-grid-status, .dashboard-grid-2x2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboard-selection-bar { align-items: flex-start; flex-direction: column; }
+  .dashboard-selection-actions { width: 100%; justify-content: flex-end; }
+}
 
 /* Mejoras de UX comunes a Hidrocarburos. */
 .sr-only {
@@ -10137,6 +10161,9 @@ body.proan-report-assistant-open .proan-content-scroll {
   background: #fffefb;
   box-shadow: 0 26px 80px rgba(30, 24, 17, .28);
 }
+.dashboard-invoice-modal { width: min(1380px, calc(100vw - 48px)); max-width: 1380px; }
+.dashboard-invoice-modal .dashboard-sat-table-wrap table { min-width: 1220px; }
+.dashboard-invoice-modal .dashboard-sat-table-wrap td { white-space: nowrap; }
 
 .dashboard-sat-modal > header {
   display: flex;

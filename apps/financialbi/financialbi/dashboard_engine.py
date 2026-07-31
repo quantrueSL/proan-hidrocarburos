@@ -34,6 +34,15 @@ _APROBACION = "`proan-quantrue.D60_REPORTING.HCARB_gold_aprobacion`"
 _ESTATUS_SAT = "`proan-quantrue.D60_REPORTING.HCARB_ESTATUS_SAT`"
 
 
+def _volumen_litros(alias: str = "f") -> str:
+    """Convierte el volumen facturado a litros; unidades no físicas aportan 0."""
+    return f"""CASE
+      WHEN {alias}.clave_unidad_principal = 'LTR' THEN COALESCE({alias}.cantidad_principal, 0)
+      WHEN {alias}.clave_unidad_principal = 'MTQ' THEN COALESCE({alias}.cantidad_principal, 0) * 1000
+      ELSE 0
+    END"""
+
+
 def _construir_filtro(
     fecha_desde: date | None,
     fecha_hasta: date | None,
@@ -41,6 +50,10 @@ def _construir_filtro(
     estado_sap: str | None,
     confianza_mseg: str | None,
     estatus_sat: str | None,
+    periodo: str | None = None,
+    sitio: str | None = None,
+    ceco: str | None = None,
+    estado_aprobacion: str | None = None,
 ) -> tuple[str, list[bigquery.ScalarQueryParameter]]:
     # f siempre disponible (tabla base); s (_SAP) y e (_ESTATUS_SAT) deben estar
     # JOINeados en TODAS las sub-queries para que este WHERE compartido resuelva
@@ -71,6 +84,20 @@ def _construir_filtro(
         else:
             clauses.append("e.estatus_cancelacion = @estatus_sat")
             params.append(bigquery.ScalarQueryParameter("estatus_sat", "STRING", estatus_sat))
+    if periodo:
+        clauses.append("FORMAT_DATE('%Y-%m', DATE(f.fecha)) = @periodo")
+        params.append(bigquery.ScalarQueryParameter("periodo", "STRING", periodo))
+    if sitio:
+        clauses.append("COALESCE(a.werks_manual, s.sitio_consumo, 'Sin sitio') = @sitio")
+        params.append(bigquery.ScalarQueryParameter("sitio", "STRING", sitio))
+    if ceco == "__SIN_CECO__":
+        clauses.append("COALESCE(a.ceco, s.ceco_sugerido) IS NULL")
+    elif ceco:
+        clauses.append("COALESCE(a.ceco, s.ceco_sugerido) = @ceco")
+        params.append(bigquery.ScalarQueryParameter("ceco", "STRING", ceco))
+    if estado_aprobacion:
+        clauses.append("COALESCE(a.estado, 'pendiente_validacion_compras') = @estado_aprobacion")
+        params.append(bigquery.ScalarQueryParameter("estado_aprobacion", "STRING", estado_aprobacion))
     return " AND ".join(clauses), params
 
 
@@ -115,10 +142,15 @@ def facturas_sat_atencion(
     estado_sap: str | None = None,
     confianza_mseg: str | None = None,
     estatus_sat: str | None = None,
+    periodo: str | None = None,
+    sitio: str | None = None,
+    ceco: str | None = None,
+    estado_aprobacion: str | None = None,
 ) -> dict[str, Any]:
     """Detalle bajo demanda para el modal SAT del dashboard."""
     where, params = _construir_filtro(
-        fecha_desde, fecha_hasta, proveedor_id, estado_sap, confianza_mseg, estatus_sat
+        fecha_desde, fecha_hasta, proveedor_id, estado_sap, confianza_mseg, estatus_sat,
+        periodo, sitio, ceco, estado_aprobacion
     )
     query = f"""
       SELECT
@@ -134,6 +166,7 @@ def facturas_sat_atencion(
         END AS estatus_sat
       FROM {_FOLIO} f
       LEFT JOIN {_VENDORS} v ON f.id_proveedor = v.id_proveedor
+      LEFT JOIN {_APROBACION} a ON f.uuid = a.uuid
       LEFT JOIN {_SAP} s ON f.uuid = s.uuid
       LEFT JOIN {_ESTATUS_SAT} e ON f.uuid = e.uuid
       WHERE {where}
@@ -163,15 +196,20 @@ def _gasto_por_ceco(where: str, params: list[bigquery.ScalarQueryParameter]) -> 
     fragmentar el gráfico en una barra distinta por cada combinación."""
     query = f"""
       SELECT
+        COALESCE(x.ceco, '__SIN_CECO__') AS filtro,
         CASE
           WHEN x.ceco IS NULL THEN 'Sin CECO'
           WHEN STRPOS(x.ceco, ',') > 0 THEN 'Varios CECO (sin confirmar)'
           ELSE COALESCE(cat.LTEXT, x.ceco)
         END AS grupo,
         SUM(x.importe_gas) AS importe_gas,
+        SUM(x.volumen_litros) AS volumen_litros,
         COUNT(*) AS n_facturas
       FROM (
-        SELECT f.importe_gas, COALESCE(a.ceco, s.ceco_sugerido) AS ceco
+        SELECT
+          f.importe_gas,
+          {_volumen_litros()} AS volumen_litros,
+          COALESCE(a.ceco, s.ceco_sugerido) AS ceco
         FROM {_FOLIO} f
         LEFT JOIN {_APROBACION} a ON f.uuid = a.uuid
         LEFT JOIN {_SAP} s ON f.uuid = s.uuid
@@ -179,7 +217,7 @@ def _gasto_por_ceco(where: str, params: list[bigquery.ScalarQueryParameter]) -> 
         WHERE {where}
       ) x
       LEFT JOIN {_CECO_CATALOGO} cat ON cat.KOSTL = TRIM(x.ceco) AND cat.DATBI = '99991231' AND cat.KOKRS = 'PROA'
-      GROUP BY grupo
+      GROUP BY filtro, grupo
       ORDER BY n_facturas DESC
     """
     return _rows(query, params)
@@ -190,13 +228,19 @@ def _gasto_por_proveedor(where: str, params: list[bigquery.ScalarQueryParameter]
     factura, no depende de que Compras/Gerencia hayan avanzado el flujo, así
     que siempre tiene cobertura completa (a diferencia de CECO/sitio)."""
     query = f"""
-      SELECT COALESCE(v.razon_social, f.emisor_rfc) AS grupo, SUM(f.importe_gas) AS importe_gas, COUNT(*) AS n_facturas
+      SELECT
+        f.id_proveedor AS filtro,
+        COALESCE(v.razon_social, f.emisor_rfc) AS grupo,
+        SUM(f.importe_gas) AS importe_gas,
+        SUM({_volumen_litros()}) AS volumen_litros,
+        COUNT(*) AS n_facturas
       FROM {_FOLIO} f
       LEFT JOIN {_VENDORS} v ON f.id_proveedor = v.id_proveedor
+      LEFT JOIN {_APROBACION} a ON f.uuid = a.uuid
       LEFT JOIN {_SAP} s ON f.uuid = s.uuid
       LEFT JOIN {_ESTATUS_SAT} e ON f.uuid = e.uuid
       WHERE {where}
-      GROUP BY grupo
+      GROUP BY filtro, grupo
       ORDER BY n_facturas DESC
     """
     return _rows(query, params)
@@ -204,13 +248,18 @@ def _gasto_por_proveedor(where: str, params: list[bigquery.ScalarQueryParameter]
 
 def _gasto_por_sitio(where: str, params: list[bigquery.ScalarQueryParameter]) -> list[dict[str, Any]]:
     query = f"""
-      SELECT COALESCE(a.werks_manual, s.sitio_consumo, 'Sin sitio') AS grupo, SUM(f.importe_gas) AS importe_gas, COUNT(*) AS n_facturas
+      SELECT
+        COALESCE(a.werks_manual, s.sitio_consumo, 'Sin sitio') AS filtro,
+        COALESCE(a.werks_manual, s.sitio_consumo, 'Sin sitio') AS grupo,
+        SUM(f.importe_gas) AS importe_gas,
+        SUM({_volumen_litros()}) AS volumen_litros,
+        COUNT(*) AS n_facturas
       FROM {_FOLIO} f
       LEFT JOIN {_APROBACION} a ON f.uuid = a.uuid
       LEFT JOIN {_SAP} s ON f.uuid = s.uuid
       LEFT JOIN {_ESTATUS_SAT} e ON f.uuid = e.uuid
       WHERE {where}
-      GROUP BY grupo
+      GROUP BY filtro, grupo
       ORDER BY n_facturas DESC
     """
     return _rows(query, params)
@@ -218,15 +267,75 @@ def _gasto_por_sitio(where: str, params: list[bigquery.ScalarQueryParameter]) ->
 
 def _gasto_por_periodo(where: str, params: list[bigquery.ScalarQueryParameter]) -> list[dict[str, Any]]:
     query = f"""
-      SELECT FORMAT_DATE('%Y-%m', DATE(f.fecha)) AS grupo, SUM(f.importe_gas) AS importe_gas, COUNT(*) AS n_facturas
+      SELECT
+        FORMAT_DATE('%Y-%m', DATE(f.fecha)) AS filtro,
+        FORMAT_DATE('%Y-%m', DATE(f.fecha)) AS grupo,
+        SUM(f.importe_gas) AS importe_gas,
+        SUM({_volumen_litros()}) AS volumen_litros,
+        COUNT(*) AS n_facturas
       FROM {_FOLIO} f
+      LEFT JOIN {_APROBACION} a ON f.uuid = a.uuid
       LEFT JOIN {_SAP} s ON f.uuid = s.uuid
       LEFT JOIN {_ESTATUS_SAT} e ON f.uuid = e.uuid
       WHERE {where}
-      GROUP BY grupo
+      GROUP BY filtro, grupo
       ORDER BY grupo
     """
     return _rows(query, params)
+
+
+def facturas_detalle(
+    *,
+    fecha_desde: date | None = None,
+    fecha_hasta: date | None = None,
+    proveedor_id: str | None = None,
+    estado_sap: str | None = None,
+    confianza_mseg: str | None = None,
+    estatus_sat: str | None = None,
+    periodo: str | None = None,
+    sitio: str | None = None,
+    ceco: str | None = None,
+    estado_aprobacion: str | None = None,
+) -> dict[str, Any]:
+    """Facturas subyacentes a la selección interactiva del dashboard."""
+    where, params = _construir_filtro(
+        fecha_desde, fecha_hasta, proveedor_id, estado_sap, confianza_mseg, estatus_sat,
+        periodo, sitio, ceco, estado_aprobacion
+    )
+    query = f"""
+      SELECT
+        COUNT(*) OVER() AS _total,
+        f.uuid,
+        f.serie,
+        CAST(f.folio AS STRING) AS folio,
+        DATE(f.fecha) AS fecha,
+        COALESCE(v.razon_social, f.emisor_rfc) AS proveedor,
+        f.importe_gas,
+        {_volumen_litros()} AS volumen_litros,
+        COALESCE(a.estado, 'pendiente_validacion_compras') AS estado_aprobacion,
+        COALESCE(s.estado_sap, 'sin_match_sap') AS estado_sap,
+        COALESCE(s.confianza_mseg, 'sin_evidencia') AS confianza_mseg,
+        CASE
+          WHEN e.estatus_cancelacion = 'vigente' THEN 'vigente'
+          WHEN e.estatus_cancelacion = 'cancelado' THEN 'cancelado'
+          ELSE 'sin_confirmar'
+        END AS estatus_sat,
+        COALESCE(a.werks_manual, s.sitio_consumo, 'Sin sitio') AS sitio,
+        COALESCE(a.ceco, s.ceco_sugerido) AS ceco
+      FROM {_FOLIO} f
+      LEFT JOIN {_VENDORS} v ON f.id_proveedor = v.id_proveedor
+      LEFT JOIN {_APROBACION} a ON f.uuid = a.uuid
+      LEFT JOIN {_SAP} s ON f.uuid = s.uuid
+      LEFT JOIN {_ESTATUS_SAT} e ON f.uuid = e.uuid
+      WHERE {where}
+      ORDER BY DATE(f.fecha) DESC, proveedor, folio
+      LIMIT 200
+    """
+    rows = _rows(query, params)
+    total = int(rows[0]["_total"]) if rows else 0
+    for row in rows:
+        row.pop("_total", None)
+    return {"total": total, "rows": rows}
 
 
 def resumen_completo(
@@ -237,12 +346,19 @@ def resumen_completo(
     estado_sap: str | None = None,
     confianza_mseg: str | None = None,
     estatus_sat: str | None = None,
+    periodo: str | None = None,
+    sitio: str | None = None,
+    ceco: str | None = None,
+    estado_aprobacion: str | None = None,
 ) -> dict[str, Any]:
     """Todo el payload del dashboard en una sola llamada de red desde el
     frontend (aunque internamente sean 5 queries -- una por bloque). Los
     filtros acotan todo el payload a la vez, para que los números siempre
     concuerden entre KPIs y gráficos."""
-    where, params = _construir_filtro(fecha_desde, fecha_hasta, proveedor_id, estado_sap, confianza_mseg, estatus_sat)
+    where, params = _construir_filtro(
+        fecha_desde, fecha_hasta, proveedor_id, estado_sap, confianza_mseg, estatus_sat,
+        periodo, sitio, ceco, estado_aprobacion
+    )
     # Cada query de BigQuery tiene un overhead apreciable de creación/espera
     # aunque el resultado esté cacheado. Son bloques independientes y el cliente
     # compartido es seguro entre hilos, así que se ejecutan concurrentemente.

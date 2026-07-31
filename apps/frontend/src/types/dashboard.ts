@@ -17,9 +17,11 @@ export type DashboardResumen = {
 };
 
 export type DashboardGastoItem = {
+  filtro: string;
   grupo: string;
   importe_gas: number;
   n_facturas: number;
+  volumen_litros: number;
 };
 
 export type DashboardData = {
@@ -50,6 +52,27 @@ export type DashboardSatDetail = {
   rows: DashboardSatInvoice[];
 };
 
+export type DashboardInvoice = {
+  uuid: string;
+  serie: string | null;
+  folio: string | null;
+  fecha: string | null;
+  proveedor: string;
+  importe_gas: number;
+  volumen_litros: number;
+  estado_aprobacion: "pendiente_validacion_compras" | "pendiente_aprobacion_gerencia" | "aprobada" | "rechazada";
+  estado_sap: "validada_sap" | "sin_match_sap";
+  confianza_mseg: "Alta" | "Media" | "sin_evidencia";
+  estatus_sat: "vigente" | "cancelado" | "sin_confirmar";
+  sitio: string;
+  ceco: string | null;
+};
+
+export type DashboardInvoiceDetail = {
+  total: number;
+  rows: DashboardInvoice[];
+};
+
 export type DashboardFiltros = {
   fecha_desde?: string | null;
   fecha_hasta?: string | null;
@@ -57,4 +80,8 @@ export type DashboardFiltros = {
   estado_sap?: "validada_sap" | "sin_match_sap" | null;
   confianza_mseg?: "Alta" | "Media" | "sin_evidencia" | null;
   estatus_sat?: "vigente" | "cancelado" | "sin_confirmar" | null;
+  periodo?: string | null;
+  sitio?: string | null;
+  ceco?: string | null;
+  estado_aprobacion?: "pendiente_validacion_compras" | "pendiente_aprobacion_gerencia" | "aprobada" | "rechazada" | null;
 };

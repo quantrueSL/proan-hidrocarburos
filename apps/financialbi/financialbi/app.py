@@ -27,6 +27,7 @@ from financialbi.aprobacion_engine import (
     rechazar as rechazar_aprobacion,
 )
 from financialbi.dashboard_engine import facturas_sat_atencion as dashboard_facturas_sat_atencion
+from financialbi.dashboard_engine import facturas_detalle as dashboard_facturas_detalle
 from financialbi.dashboard_engine import resumen_completo as dashboard_resumen_completo
 from financialbi.estatus_sat import ensure_schema as ensure_estatus_sat_schema
 
@@ -87,6 +88,13 @@ class DashboardFiltros(BaseModel):
     estado_sap: Literal["validada_sap", "sin_match_sap"] | None = None
     confianza_mseg: Literal["Alta", "Media", "sin_evidencia"] | None = None
     estatus_sat: Literal["vigente", "cancelado", "sin_confirmar"] | None = None
+    periodo: str | None = None
+    sitio: str | None = None
+    ceco: str | None = None
+    estado_aprobacion: Literal[
+        "pendiente_validacion_compras", "pendiente_aprobacion_gerencia", "aprobada", "rechazada"
+    ] | None = None
+    detalle: bool = False
     detalle_sat: bool = False
 
 
@@ -326,8 +334,11 @@ def financial_dashboard(filtros: DashboardFiltros = Depends()) -> dict[str, Any]
     try:
         values = filtros.model_dump()
         detalle_sat = values.pop("detalle_sat")
+        detalle = values.pop("detalle")
         if detalle_sat:
             return _to_jsonable(dashboard_facturas_sat_atencion(**values))
+        if detalle:
+            return _to_jsonable(dashboard_facturas_detalle(**values))
         return _to_jsonable(dashboard_resumen_completo(**values))
     except Exception as exc:
         log.exception("dashboard error")

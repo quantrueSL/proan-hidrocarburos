@@ -57,6 +57,42 @@ class QueryConcurrencyTests(unittest.TestCase):
         self.assertEqual(result_payload["resumen"]["total_facturas"], 1)
         self.assertEqual(result_payload["gasto_por_periodo"][0]["grupo"], "2026-07")
 
+    def test_dashboard_volume_is_normalized_to_liters(self) -> None:
+        expression = dashboard_engine._volumen_litros("invoice")
+
+        self.assertIn(
+            "invoice.clave_unidad_principal = 'LTR' THEN COALESCE(invoice.cantidad_principal, 0)",
+            expression,
+        )
+        self.assertIn(
+            "invoice.clave_unidad_principal = 'MTQ' THEN COALESCE(invoice.cantidad_principal, 0) * 1000",
+            expression,
+        )
+        self.assertIn("ELSE 0", expression)
+
+    def test_dashboard_interactive_filters_are_parameterized(self) -> None:
+        where, params = dashboard_engine._construir_filtro(
+            None, None, None, None, None, None,
+            periodo="2026-07",
+            sitio="Centro Norte",
+            ceco="__SIN_CECO__",
+            estado_aprobacion="aprobada",
+        )
+
+        self.assertIn("@periodo", where)
+        self.assertIn("@sitio", where)
+        self.assertIn("COALESCE(a.ceco, s.ceco_sugerido) IS NULL", where)
+        self.assertIn("@estado_aprobacion", where)
+        self.assertEqual([param.name for param in params], ["periodo", "sitio", "estado_aprobacion"])
+
+    def test_dashboard_detail_removes_internal_total(self) -> None:
+        row = {"_total": 3, "uuid": "invoice-1"}
+        with patch.object(dashboard_engine, "_rows", return_value=[row]):
+            result = dashboard_engine.facturas_detalle()
+
+        self.assertEqual(result["total"], 3)
+        self.assertEqual(result["rows"], [{"uuid": "invoice-1"}])
+
     def test_text_search_is_parameterized(self) -> None:
         where, params = hidrocarburos_engine._filters(busqueda=" GCRE13556 ")
 

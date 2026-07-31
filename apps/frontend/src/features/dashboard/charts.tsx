@@ -11,6 +11,7 @@ import type { DashboardGastoItem } from "@/types/dashboard";
 // hover Y foco (teclado), leyenda siempre que haya ≥2 categorías.
 
 const money = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 });
+const quantity = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 });
 const MES_LABEL: Record<string, string> = {
   "01": "ene", "02": "feb", "03": "mar", "04": "abr", "05": "may", "06": "jun",
   "07": "jul", "08": "ago", "09": "sep", "10": "oct", "11": "nov", "12": "dic"
@@ -18,6 +19,10 @@ const MES_LABEL: Record<string, string> = {
 
 export function formatMoney(value: number | null | undefined) {
   return `${money.format(value || 0)} MXN`;
+}
+
+export function formatLiters(value: number | null | undefined) {
+  return `${quantity.format(value || 0)} L`;
 }
 
 export function formatMonth(grupo: string) {
@@ -59,57 +64,84 @@ function ExpandModal({ titulo, controls, onClose, children }: { titulo: string; 
   );
 }
 
-type Metric = "importe" | "facturas";
+export type DashboardMetric = "facturas" | "importe" | "litros";
 
-function MetricToggle({ metric, onChange }: { metric: Metric; onChange: (m: Metric) => void }) {
+export function MetricToggle({ metric, onChange }: { metric: DashboardMetric; onChange: (m: DashboardMetric) => void }) {
   return (
     <div className="dashboard-metric-toggle" role="group" aria-label="Métrica a mostrar">
-      <button aria-pressed={metric === "importe"} onClick={() => onChange("importe")} type="button">Importe</button>
       <button aria-pressed={metric === "facturas"} onClick={() => onChange("facturas")} type="button">Facturas</button>
+      <button aria-pressed={metric === "importe"} onClick={() => onChange("importe")} type="button">Coste</button>
+      <button aria-pressed={metric === "litros"} onClick={() => onChange("litros")} type="button">Litros</button>
     </div>
   );
 }
 
+function valueOf(item: DashboardGastoItem, metric: DashboardMetric) {
+  if (metric === "importe") return item.importe_gas || 0;
+  if (metric === "litros") return item.volumen_litros || 0;
+  return item.n_facturas;
+}
+
+function formatMetricValue(item: DashboardGastoItem, metric: DashboardMetric, compact = false) {
+  if (metric === "importe") return formatMoney(item.importe_gas);
+  if (metric === "litros") return formatLiters(item.volumen_litros);
+  return compact ? `${item.n_facturas} fact.` : quantity.format(item.n_facturas);
+}
+
 // Barras horizontales rankeadas -- una sola serie (magnitud), un solo tono
 // secuencial (nunca colorea por categoría: el orden ya lo dice todo).
-// fixedMetric: si se da, no se muestra el selector Importe/Facturas -- se usa
-// siempre esa métrica (jul-2026: los gráficos de abajo del dashboard son solo
-// conteo de facturas, sin toggle).
-export function RankedBarChart({ items, titulo, maxRows = 5, fixedMetric }: { items: DashboardGastoItem[]; titulo: string; maxRows?: number; fixedMetric?: Metric }) {
-  const [metric, setMetric] = useState<Metric>(fixedMetric ?? "importe");
-  const activeMetric = fixedMetric ?? metric;
+export function RankedBarChart({
+  items, titulo, metric, maxRows = 5, activeFilter, onSelect
+}: {
+  items: DashboardGastoItem[];
+  titulo: string;
+  metric: DashboardMetric;
+  maxRows?: number;
+  activeFilter?: string | null;
+  onSelect?: (item: DashboardGastoItem) => void;
+}) {
   const [hover, setHover] = useState<number | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [zoomed, setZoomed] = useState(false);
-  const visibles = showAll || zoomed ? items : items.slice(0, maxRows);
-  const valueOf = (item: DashboardGastoItem) => (activeMetric === "importe" ? item.importe_gas || 0 : item.n_facturas);
-  const max = Math.max(1, ...items.map(valueOf));
-  const restantes = items.length - visibles.length;
+  const orderedItems = [...items].sort((a, b) => valueOf(b, metric) - valueOf(a, metric));
+  const visibles = showAll || zoomed ? orderedItems : orderedItems.slice(0, maxRows);
+  const max = Math.max(1, ...orderedItems.map((item) => valueOf(item, metric)));
+  const restantes = orderedItems.length - visibles.length;
 
   const body = (
     <>
       {visibles.length ? (
         <ul className="dashboard-bar-list">
           {visibles.map((item, i) => {
-            const v = valueOf(item);
+            const v = valueOf(item, metric);
             const pct = Math.max(2, (v / max) * 100);
             return (
               <li
-                className={`dashboard-bar-row${hover === i ? " is-hover" : ""}`}
+                aria-pressed={activeFilter === item.filtro}
+                className={`dashboard-bar-row${hover === i ? " is-hover" : ""}${activeFilter === item.filtro ? " is-selected" : ""}`}
                 key={item.grupo}
                 onBlur={() => setHover(null)}
+                onClick={() => onSelect?.(item)}
                 onFocus={() => setHover(i)}
+                onKeyDown={(event) => {
+                  if ((event.key === "Enter" || event.key === " ") && onSelect) {
+                    event.preventDefault();
+                    onSelect(item);
+                  }
+                }}
                 onMouseEnter={() => setHover(i)}
                 onMouseLeave={() => setHover(null)}
+                role={onSelect ? "button" : undefined}
                 tabIndex={0}
               >
                 <span className="dashboard-bar-label" title={item.grupo}>{item.grupo}</span>
                 <div className="dashboard-bar-track" aria-hidden="true"><div className="dashboard-bar-fill" style={{ width: `${pct}%` }} /></div>
-                <span className="dashboard-bar-value">{activeMetric === "importe" ? formatMoney(item.importe_gas) : `${item.n_facturas} fact.`}</span>
+                <span className="dashboard-bar-value">{formatMetricValue(item, metric, true)}</span>
                 {hover === i ? (
                   <div className="dashboard-tooltip dashboard-tooltip-row" role="tooltip">
                     <strong>{formatMoney(item.importe_gas)}</strong>
                     <span>{item.n_facturas} factura{item.n_facturas === 1 ? "" : "s"}</span>
+                    <span>{formatLiters(item.volumen_litros)}</span>
                   </div>
                 ) : null}
               </li>
@@ -124,22 +156,27 @@ export function RankedBarChart({ items, titulo, maxRows = 5, fixedMetric }: { it
       ) : null}
     </>
   );
-  const controls = fixedMetric ? null : <MetricToggle metric={metric} onChange={setMetric} />;
 
   return (
     <div className="dashboard-card">
-      <div className="dashboard-card-head"><h3>{titulo}</h3><div className="dashboard-card-head-actions">{controls}<ExpandButton onClick={() => setZoomed(true)} titulo={titulo} /></div></div>
+      <div className="dashboard-card-head"><h3>{titulo}</h3><div className="dashboard-card-head-actions"><ExpandButton onClick={() => setZoomed(true)} titulo={titulo} /></div></div>
       {body}
-      {zoomed ? <ExpandModal controls={controls} onClose={() => setZoomed(false)} titulo={titulo}>{body}</ExpandModal> : null}
+      {zoomed ? <ExpandModal onClose={() => setZoomed(false)} titulo={titulo}>{body}</ExpandModal> : null}
     </div>
   );
 }
 
 // Tendencia mensual -- línea + área, un solo tono. Crosshair + tooltip por
 // punto (hit target HTML de 24px, no el SVG -- foco de teclado incluido).
-export function TrendChart({ items, titulo, fixedMetric }: { items: DashboardGastoItem[]; titulo: string; fixedMetric?: Metric }) {
-  const [metric, setMetric] = useState<Metric>(fixedMetric ?? "importe");
-  const activeMetric = fixedMetric ?? metric;
+export function TrendChart({
+  items, titulo, metric, activeFilter, onSelect
+}: {
+  items: DashboardGastoItem[];
+  titulo: string;
+  metric: DashboardMetric;
+  activeFilter?: string | null;
+  onSelect?: (item: DashboardGastoItem) => void;
+}) {
   const [hover, setHover] = useState<number | null>(null);
   const [zoomed, setZoomed] = useState(false);
   const W = 640;
@@ -150,12 +187,11 @@ export function TrendChart({ items, titulo, fixedMetric }: { items: DashboardGas
   const PAD_TOP = 22;
   const PAD_BOTTOM = 34;
   const AXIS_Y = H - PAD_BOTTOM;
-  const valueOf = (item: DashboardGastoItem) => (activeMetric === "importe" ? item.importe_gas || 0 : item.n_facturas);
-  const max = Math.max(1, ...items.map(valueOf));
+  const max = Math.max(1, ...items.map((item) => valueOf(item, metric)));
   const n = items.length;
   const xAt = (i: number) => (n <= 1 ? W / 2 : PAD_X + (i * (W - PAD_X * 2)) / (n - 1));
   const yAt = (v: number) => AXIS_Y - (v / max) * (AXIS_Y - PAD_TOP);
-  const points = items.map((item, i) => ({ x: xAt(i), y: yAt(valueOf(item)), item }));
+  const points = items.map((item, i) => ({ x: xAt(i), y: yAt(valueOf(item, metric)), item }));
   const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
   const areaPath = points.length
     ? `${linePath} L ${points[points.length - 1].x.toFixed(1)} ${AXIS_Y} L ${points[0].x.toFixed(1)} ${AXIS_Y} Z`
@@ -173,7 +209,13 @@ export function TrendChart({ items, titulo, fixedMetric }: { items: DashboardGas
             <path className="dashboard-trend-line" d={linePath} />
             {hovered ? <line className="dashboard-trend-crosshair" x1={hovered.x} x2={hovered.x} y1={PAD_TOP} y2={AXIS_Y} /> : null}
             {points.map((p, i) => (
-              <circle className={`dashboard-trend-dot${hover === i ? " is-hover" : ""}`} cx={p.x} cy={p.y} key={p.item.grupo} r={hover === i ? 5 : 4} />
+              <circle
+                className={`dashboard-trend-dot${hover === i ? " is-hover" : ""}${activeFilter === p.item.filtro ? " is-selected" : ""}`}
+                cx={p.x}
+                cy={p.y}
+                key={p.item.grupo}
+                r={hover === i || activeFilter === p.item.filtro ? 5 : 4}
+              />
             ))}
           </svg>
           {/* Etiquetas en HTML (no <text> de SVG) para que no se distorsionen --
@@ -181,7 +223,7 @@ export function TrendChart({ items, titulo, fixedMetric }: { items: DashboardGas
           <div className="dashboard-trend-values">
             {points.map((p) => (
               <span className="dashboard-trend-value" key={p.item.grupo} style={{ left: `${(p.x / W) * 100}%`, top: `${(p.y / H) * 100}%` }}>
-                {activeMetric === "importe" ? formatMoney(p.item.importe_gas) : p.item.n_facturas}
+                {formatMetricValue(p.item, metric)}
               </span>
             ))}
           </div>
@@ -195,10 +237,12 @@ export function TrendChart({ items, titulo, fixedMetric }: { items: DashboardGas
           <div className="dashboard-trend-hits">
             {points.map((p, i) => (
               <button
-                aria-label={`${formatMonth(p.item.grupo)}: ${formatMoney(p.item.importe_gas)}, ${p.item.n_facturas} facturas`}
+                aria-label={`${formatMonth(p.item.grupo)}: ${formatMoney(p.item.importe_gas)}, ${p.item.n_facturas} facturas, ${formatLiters(p.item.volumen_litros)}`}
+                aria-pressed={activeFilter === p.item.filtro}
                 className="dashboard-trend-hit"
                 key={p.item.grupo}
                 onBlur={() => setHover(null)}
+                onClick={() => onSelect?.(p.item)}
                 onFocus={() => setHover(i)}
                 onMouseEnter={() => setHover(i)}
                 onMouseLeave={() => setHover(null)}
@@ -207,23 +251,33 @@ export function TrendChart({ items, titulo, fixedMetric }: { items: DashboardGas
               />
             ))}
           </div>
+          {hovered ? (
+            <div
+              className="dashboard-tooltip dashboard-tooltip-top"
+              role="tooltip"
+              style={{ left: `${(hovered.x / W) * 100}%`, top: `${(hovered.y / H) * 100}%` }}
+            >
+              <strong>{formatMonth(hovered.item.grupo)}</strong>
+              <span>{formatMoney(hovered.item.importe_gas)}</span>
+              <span>{hovered.item.n_facturas} factura{hovered.item.n_facturas === 1 ? "" : "s"}</span>
+              <span>{formatLiters(hovered.item.volumen_litros)}</span>
+            </div>
+          ) : null}
         </div>
       ) : <p className="dashboard-empty">Sin datos todavía.</p>}
     </>
   );
-  const controls = fixedMetric ? null : <MetricToggle metric={metric} onChange={setMetric} />;
-
   return (
     <div className="dashboard-card">
-      <div className="dashboard-card-head"><h3>{titulo}</h3><div className="dashboard-card-head-actions">{controls}<ExpandButton onClick={() => setZoomed(true)} titulo={titulo} /></div></div>
+      <div className="dashboard-card-head"><h3>{titulo}</h3><div className="dashboard-card-head-actions"><ExpandButton onClick={() => setZoomed(true)} titulo={titulo} /></div></div>
       {body}
-      {zoomed ? <ExpandModal controls={controls} onClose={() => setZoomed(false)} titulo={titulo}>{body}</ExpandModal> : null}
+      {zoomed ? <ExpandModal onClose={() => setZoomed(false)} titulo={titulo}>{body}</ExpandModal> : null}
     </div>
   );
 }
 
 export type StatusTone = "good" | "warning" | "critical" | "neutral";
-export type StatusSegment = { label: string; value: number; tone: StatusTone };
+export type StatusSegment = { label: string; value: number; tone: StatusTone; filterValue: string };
 
 const DONUT_R = 42;
 const DONUT_CX = 60;
@@ -233,7 +287,15 @@ const DONUT_C = 2 * Math.PI * DONUT_R;
 // Donut de categorías de ESTADO real (no identidad genérica) -- colores de
 // estado reservados, centro con el total, siempre con leyenda + etiqueta
 // (nunca solo color). Reemplaza la barra de estado horizontal (jul-2026).
-export function Donut({ action, segments, titulo }: { action?: React.ReactNode; segments: StatusSegment[]; titulo: string }) {
+export function Donut({
+  action, segments, titulo, activeFilter, onSelect
+}: {
+  action?: React.ReactNode;
+  segments: StatusSegment[];
+  titulo: string;
+  activeFilter?: string | null;
+  onSelect?: (segment: StatusSegment) => void;
+}) {
   const [hover, setHover] = useState<number | null>(null);
   const total = segments.reduce((s, seg) => s + seg.value, 0);
   const visibles = segments.filter((s) => s.value > 0);
@@ -259,17 +321,26 @@ export function Donut({ action, segments, titulo }: { action?: React.ReactNode; 
             <g transform={`rotate(-90 ${DONUT_CX} ${DONUT_CY})`}>
               {arcos.map((seg, i) => seg.value > 0 ? (
                 <circle
-                  className={`dashboard-donut-arc tone-${seg.tone}${hover === i ? " is-hover" : ""}`}
+                  aria-pressed={activeFilter === seg.filterValue}
+                  className={`dashboard-donut-arc tone-${seg.tone}${hover === i ? " is-hover" : ""}${activeFilter === seg.filterValue ? " is-selected" : ""}`}
                   cx={DONUT_CX}
                   cy={DONUT_CY}
                   key={seg.label}
                   onBlur={() => setHover(null)}
+                  onClick={() => onSelect?.(seg)}
                   onFocus={() => setHover(i)}
+                  onKeyDown={(event) => {
+                    if ((event.key === "Enter" || event.key === " ") && onSelect) {
+                      event.preventDefault();
+                      onSelect(seg);
+                    }
+                  }}
                   onMouseEnter={() => setHover(i)}
                   onMouseLeave={() => setHover(null)}
                   r={DONUT_R}
                   strokeDasharray={`${seg.dash} ${DONUT_C - seg.dash}`}
                   strokeDashoffset={seg.offset}
+                  role={onSelect ? "button" : undefined}
                   tabIndex={0}
                 />
               ) : null)}
@@ -285,7 +356,17 @@ export function Donut({ action, segments, titulo }: { action?: React.ReactNode; 
           ) : null}
           <ul className="dashboard-status-legend">
             {segments.map((seg) => (
-              <li key={seg.label}><span className={`dashboard-status-dot tone-${seg.tone}`} aria-hidden="true" />{seg.label} <b>{seg.value}</b></li>
+              <li key={seg.label}>
+                <button
+                  aria-pressed={activeFilter === seg.filterValue}
+                  className={activeFilter === seg.filterValue ? "is-selected" : ""}
+                  disabled={!seg.value}
+                  onClick={() => onSelect?.(seg)}
+                  type="button"
+                >
+                  <span className={`dashboard-status-dot tone-${seg.tone}`} aria-hidden="true" />{seg.label} <b>{seg.value}</b>
+                </button>
+              </li>
             ))}
           </ul>
         </div>
