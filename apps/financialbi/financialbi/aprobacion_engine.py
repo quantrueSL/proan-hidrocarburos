@@ -142,13 +142,18 @@ def _filtros_cola(
     estado_sap: str | None = None,
     confianza_mseg: str | None = None,
     sitio: str = "all",
+    ceco_sugerido: str = "all",
 ) -> tuple[str, list[bigquery.ScalarQueryParameter]]:
     """Filtros de la cola de aprobación -- clave_sat/clasificación (que sí tiene
     M1) se dejaron fuera a propósito: en M2/M3 todas las facturas ya pasaron la
     clasificación, así que filtrar por eso no aporta nada a la decisión de
     Compras/Gerencia (feedback explícito del usuario, jul-2026). confianza_mseg
     añade 'sin_evidencia' (no existe como filtro en M1) para poder aislar las
-    facturas sin ningún rastro de MSEG."""
+    facturas sin ningún rastro de MSEG. ceco_sugerido (ago-2026) aísla las
+    facturas SIN ninguna sugerencia de CECO (ni por ticket, ni por proveedor,
+    ni por documento) -- las que de verdad requieren investigar a mano, incluso
+    cuando sí hay match MSEG (ver README, caso SC8581: recepción confirmada
+    pero KOSTL vacío en el propio origen SAP)."""
     clauses = ["TRUE"]
     params: list[bigquery.ScalarQueryParameter] = []
     if busqueda and busqueda.strip():
@@ -183,6 +188,10 @@ def _filtros_cola(
         clauses.append("s.werks IS NOT NULL")
     elif sitio == "without_site":
         clauses.append("s.werks IS NULL")
+    if ceco_sugerido == "sin_sugerencia":
+        clauses.append("s.ceco_sugerido IS NULL")
+    elif ceco_sugerido == "con_sugerencia":
+        clauses.append("s.ceco_sugerido IS NOT NULL")
     return " AND ".join(clauses), params
 
 

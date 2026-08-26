@@ -172,7 +172,8 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
   const pages = Math.max(1, Math.ceil(queue.total / queue.page_size));
   const activeFilterCount = [
     filters.busqueda, filters.proveedor_id, filters.estado_sap, filters.confianza_mseg,
-    filters.sitio && filters.sitio !== "all" ? filters.sitio : null
+    filters.sitio && filters.sitio !== "all" ? filters.sitio : null,
+    filters.ceco_sugerido && filters.ceco_sugerido !== "all" ? filters.ceco_sugerido : null
   ].filter(Boolean).length;
 
   function choose(next: AprobacionInvoice) {
@@ -280,6 +281,7 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
       <label>Estado SAP<select value={filters.estado_sap || ""} onChange={(e) => setFilters({ ...filters, estado_sap: (e.target.value || null) as AprobacionFiltros["estado_sap"] })}><option value="">Todos</option><option value="validada_sap">Validada</option><option value="sin_match_sap">Sin match</option></select></label>
       <label>Centro<select value={filters.sitio || "all"} onChange={(e) => setFilters({ ...filters, sitio: e.target.value as AprobacionFiltros["sitio"] })}><option value="all">Todos</option><option value="with_site">Con centro</option><option value="without_site">Sin centro</option></select></label>
       <label>Recepción MSEG<select value={filters.confianza_mseg || ""} onChange={(e) => setFilters({ ...filters, confianza_mseg: (e.target.value || null) as AprobacionFiltros["confianza_mseg"] })}><option value="">Todas</option><option value="Alta">Alta</option><option value="Media">Media</option><option value="sin_evidencia">Sin evidencia</option></select></label>
+      <label>CECO sugerido<select value={filters.ceco_sugerido || "all"} onChange={(e) => setFilters({ ...filters, ceco_sugerido: e.target.value as AprobacionFiltros["ceco_sugerido"] })}><option value="all">Todos</option><option value="sin_sugerencia">Sin sugerencia (a mano)</option><option value="con_sugerencia">Con sugerencia</option></select></label>
       <div className="filters-sidebar-actions"><button className="hydro-button" disabled={busy} onClick={() => refreshAll()} type="button">{busy ? "Actualizando…" : "Aplicar filtros"}</button><button className="hydro-link-button" onClick={() => { setFilters({}); refreshAll({}); }} type="button">Restablecer</button></div>
     </FiltersSidebar>
     <div className="approval-page">

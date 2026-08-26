@@ -70,6 +70,7 @@ class AprobacionFiltros(BaseModel):
     estado_sap: Literal["validada_sap", "sin_match_sap"] | None = None
     confianza_mseg: Literal["Alta", "Media", "sin_evidencia"] | None = None
     sitio: Literal["all", "with_site", "without_site"] = "all"
+    ceco_sugerido: Literal["all", "con_sugerencia", "sin_sugerencia"] = "all"
 
 
 class AprobacionSearch(AprobacionFiltros):

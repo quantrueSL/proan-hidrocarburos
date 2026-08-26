@@ -112,6 +112,10 @@ export type AprobacionFiltros = {
   estado_sap?: "validada_sap" | "sin_match_sap" | null;
   confianza_mseg?: "Alta" | "Media" | "sin_evidencia" | null;
   sitio?: "all" | "with_site" | "without_site";
+  // Aísla las facturas SIN ninguna sugerencia de CECO (ni por ticket, ni por proveedor, ni
+  // por documento) -- incluye casos con evidencia MSEG fuerte pero sin fuente de CECO (KOSTL
+  // vacío en el propio origen SAP, ver README).
+  ceco_sugerido?: "all" | "con_sugerencia" | "sin_sugerencia";
 };
 
 export type AprobacionSearch = AprobacionFiltros & { page?: number; page_size?: number };
