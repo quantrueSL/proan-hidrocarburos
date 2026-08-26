@@ -129,6 +129,151 @@ histórico completo con peor cobertura SAP). Huérfanos pre-2026 en las tablas
 mutables `HCARB_gold_aprobacion` (509 filas, ninguna ya `aprobada`/`rechazada`)
 y `HCARB_ESTATUS_SAT` (506 filas) se borraron con `DELETE` explícito.
 
+**Fuente de M1: `D00_SANDBOX.cfdis` → `D30_INTEGRATION.cfdi_completo` (ago-2026,
+rama `Fer`, ver más abajo el estado).** `cfdis` venía incompleta: para 414/547
+facturas de gas solo traía 1 línea (de gas) aunque `SubTotal` exigiera más —
+`importe_gas` ya lo compensaba restando desde `SubTotal` en vez de sumar
+líneas (fix jul-2026 de más arriba), así que el importe siempre fue correcto,
+pero `n_lineas_total`/`conceptos_gas` (la evidencia auditable de M1) salían
+subcontados. `cfdi_completo` trae **todas** las líneas por factura (mismo
+grano UUID+concepto, mismas columnas, más un índice posicional
+`concepto_idx` por línea). Verificado contra BigQuery real: mismo universo de
+facturas del receptor (277.489 vs 277.446 UUID, prácticamente igual) pero con
+casi el doble de líneas (543.759 vs 278.776) — confirma que antes faltaban
+líneas, no que haya facturas nuevas. Efecto en el universo de gas (tabla de
+prueba): 606 → 614 facturas, 606 → 8.060 líneas (hasta 9.333 tras el fix de
+dedup de más abajo), 0 → 8 mixtas reales detectadas por primera vez (antes
+`es_mixta` daba siempre `false` porque nunca había línea no-gas que ver).
+`importe_gas` total prácticamente no se mueve ($91,12M → $91,13M) — la
+fórmula ya era robusta a líneas faltantes, esto solo la vuelve auditable.
+
+**Dedup por `UUID+concepto_idx`, no por contenido (ago-2026).** El dedup
+original de M1 (`ClaveProdServ+Cantidad+Importe+Descripcion`) daba por hecho
+que dos líneas con esos 4 valores iguales eran la misma línea reingresada —
+válido con `cfdis` (1 línea/factura, nunca colisionaba) pero no con
+`cfdi_completo`, donde es normal que dos conceptos DISTINTOS de una factura
+de hasta 49 líneas compartan producto+cantidad+precio+descripción. Medido:
+217/614 facturas de gas tenían colisiones así, perdiendo 1.273 líneas reales
+— sin efecto en `importe_gas`/`es_mixta` (la colisión siempre caía dentro de
+la misma categoría gas/no-gas), pero sí en la evidencia auditable. Fix:
+dedupear por `UUID+concepto_idx` (el índice posicional real de la línea,
+quedándose con el `_ingested_at` más reciente) — colapsa solo reingestas
+genuinas (mismo `_id`, verificado), nunca líneas legítimamente distintas.
+
+**Desglose MSEG por ticket de entrega (ago-2026, M2).** Hasta ahora el match
+MSEG era 1 factura ↔ 1 documento SAP AGREGADO (`SUM` de todas sus líneas
+ZEILE) — cuando el documento repartía el gasto entre varios CECO, la UI solo
+podía pedir "elige uno de estos N". `NoIdentificacion` en cada línea del CFDI
+(disponible solo desde `cfdi_completo`) resultó ser el ticket/remito de
+entrega: agrupando las líneas de gas de una factura por ese campo, cada
+ticket casa por importe (misma tolerancia que el match a nivel documento, ver
+abajo) contra una línea ZEILE del documento MSEG ya emparejado, y cada ZEILE
+trae su propio KOSTL. Verificado contra BigQuery real: 100% de match
+ticket-a-ticket en Corpo Gas (42/42 facturas), 91,7% promedio en Gas Noel
+(127/235 perfectas), 69–81% en 3 proveedores más — 0% en 2 proveedores
+pequeños cuyo `NoIdentificacion` no sigue este patrón (no se fuerza el match
+ahí). Nuevas columnas en `HCARB_GOLD_VALIDACION_SAP` (mismo grano por
+factura, `tickets_mseg` es un array anidado): `tickets_mseg`,
+`mseg_n_tickets`, `mseg_n_tickets_match`. Nuevo valor `'ticket'` en
+`ceco_sugerido_origen` cuando **todos** los tickets de gas de la factura
+(uno o varios — antes exigía más de uno, ver dos entradas más abajo)
+encontraron su ZEILE exacta: es la fuente de CECO más precisa que existe,
+por encima de `'proveedor'` (patrón histórico del proveedor) y de
+`'documento'`/`'documento_multiple'` (KOSTL del documento agregado). Efecto
+en la tabla de prueba: 199 → 284 facturas con CECO exacto por ticket.
+
+**Tolerancia relativa en el match de importe MSEG (ago-2026).** El $0,20 MXN
+fijo (jul-2026, pensado para el ruido de redondeo de la `cfdis` vieja) dejaba
+en `'Media'` facturas cuya diferencia real es sistemática y proporcional al
+importe, no ruido aleatorio: medido contra BigQuery real (497 facturas con
+folio exacto), 41 quedaban fuera del $0,20 pese a diferir un
+0,0174–0,0181% MUY consistente del importe (ej. $0,24 en una factura de
+$1.369, $1,88 en una de $10.629 — mismo ~0,018%, probablemente una diferencia
+de redondeo del precio unitario entre el CFDI y SAP). Justo por encima hay un
+hueco limpio: los casos que ya son documentos genuinamente distintos
+(recepción consolidada de otras entregas) empiezan en 0,06% — el triple del
+techo del ruido real, así que no hay riesgo de colar un importe realmente
+distinto. Fix: `tolerancia_importe = GREATEST($0.20, 0.03% del importe)`,
+aplicado tanto en `mseg_scored`/`match_importe` (nivel documento) como en el
+match por ticket (mismo criterio, consistente). Efecto: `confianza_mseg`
+`'Alta'` sube de 447 a 488 sobre el total de 505 `'Alta'`+`'Media'`
+(coincide con el histórico de antes del cambio de fuente).
+
+**`confianza_mseg` sube a `'Alta'` con match perfecto por ticket (ago-2026).**
+`confianza_mseg` comparaba el documento MSEG COMPLETO contra `importe_gas` de
+la factura — si el documento consolida otras entregas/facturas (caso real:
+un mismo documento SAP puede cubrir varios CFDIs), ese agregado nunca
+reconcilia aunque la factura esté perfectamente corroborada línea a línea.
+Caso real: una factura de INFRA (mixta, 3 líneas de gas de 15 totales) tenía
+sus 3 tickets casando exacto contra sus 3 ZEILE (`ceco_sugerido_origen` ya
+daba `'ticket'`), pero `confianza_mseg` se quedaba en `'Media'` porque el
+documento completo suma $180.397 (de otras entregas) contra los $4.056 de
+esa factura. Fix: si TODOS los tickets de gas de la factura encontraron su
+propia ZEILE (`mseg_n_tickets_match = mseg_n_tickets`), `confianza_mseg` sube
+a `'Alta'` aunque el agregado del documento no cuadre — solo puede subir,
+nunca baja un `'Alta'` que ya tenía por el match de documento. Efecto en la
+tabla de prueba: `'Alta'` sube de 488 a 497, `'Media'` baja de 17 a 8.
+
+**CECO por ticket también con un solo ticket exacto (ago-2026, D33).**
+`ceco_sugerido_origen='ticket'` exigía más de un ticket — pero una factura
+con una sola línea de gas (caso común en facturas mixtas, ej. INFRA con 1 de
+12 líneas) que casa exacto contra su ZEILE es evidencia igual de fuerte, y
+más precisa que `'proveedor'` (patrón histórico, no de esta entrega en
+concreto) o `'documento_multiple'` (obliga a elegir entre CECOs que ni
+siquiera corresponden a este ticket). Cambiado de `n_tickets > 1` a
+`n_tickets >= 1` en `ceco_sugerido`/`ceco_sugerido_origen`, ya consistente
+con el criterio de `confianza_mseg` de la entrada anterior. Efecto en la
+tabla de prueba: `'ticket'` sube de 199 a 284 (+85) — 47 pasaban antes por
+`'documento'` (misma respuesta, mejor evidencia), 34 por `'proveedor'`
+(patrón genérico → evidencia real de esta factura), 4 por
+`'documento_multiple'` (ambigüedad real resuelta). Los 129 casos sin ninguna
+sugerencia no cambian — son facturas donde ni el ticket, ni el proveedor, ni
+el documento aportan CECO (ver más abajo, caso SC8581).
+
+**Facturas con evidencia MSEG pero sin CECO sugerido — no siempre es
+resoluble.** Caso real (SC8581, Distribuidora Potosina de Gas): `confianza_mseg='Alta'`
+(folio e importe casan exacto) pero `ceco_sugerido` sale `NULL`. La línea
+MSEG que casó trae `KOSTL` genuinamente vacío **en el propio origen SAP**
+(verificado en `proan_MSEG_HIDROCARBUROS_20260714`, no es una pérdida de la
+query), y el proveedor tampoco es de los "un solo sitio" que prellenan CECO
+por patrón histórico. Confirma la limitación ya documentada más arriba
+(Fase-1-bis, sección CECO): es un límite de INGESTA, no de modelo — aquí no
+hay CECO que sugerir, Compras tiene que capturarlo a mano igual que si no
+hubiera match MSEG. Para encontrar estos casos fácilmente se añadió el
+filtro **"CECO sugerido"** (Todos/Sin sugerencia/Con sugerencia) en las tres
+colas de `apps/frontend` (Compras, Gerencia, Historial) — `sin_sugerencia`
+filtra `ceco_sugerido IS NULL` sin importar si hay o no evidencia MSEG, así
+aísla exactamente estos casos sin ambigüedad.
+
+**Estado de la rama `Fer` (ago-2026) — nada de esto está en producción
+todavía.** Todo lo anterior desde "Fuente de M1" vive en la rama de git
+`Fer`, probado end-to-end en local contra tablas de prueba, NO contra las
+tablas reales que lee producción:
+
+- `ConsultasBigQuery/HCARB_gold_clasificacion.sql` y
+  `HCARB_gold_validacion_sap.sql` ya tienen el cambio de fuente/lógica
+  descrito arriba, pero **no se han vuelto a ejecutar contra las tablas
+  reales** `HCARB_GOLD_CLASIFICACION_FOLIO`/`HCARB_GOLD_VALIDACION_SAP` (esas
+  tablas siguen siendo las de julio, sobre `cfdis`).
+- `HCARB_gold_clasificacion_fer.sql` y `HCARB_gold_validacion_sap_fer.sql`
+  son copias temporales que escriben en `HCARB_GOLD_CLASIFICACION_FOLIO_fer`
+  y `HCARB_GOLD_VALIDACION_SAP_fer` (mismo dataset `D60_REPORTING`) — solo
+  para poder comparar sin tocar producción. Borrar los 2 `.sql` `_fer` y las
+  2 tablas `_fer` cuando el cambio se confirme y se aplique a las tablas
+  reales (ejecutando los `.sql` sin sufijo).
+- El backend local (`apps/financialbi`) apunta a las tablas `_fer` vía
+  `HCARB_FOLIO_TABLE`/`HCARB_SAP_TABLE` en `config/financialbi.env`
+  (`apps/financialbi/financialbi/hidrocarburos_engine.py`) — variables que
+  solo existen en desarrollo (`config/financialbi.env` no lo usa Cloud Run),
+  así que producción nunca se entera. Quitar esas 2 líneas del `.env` para
+  volver a las tablas reales en local.
+- Pendiente antes de mergear a `main`: decidir si aplicar el cambio también a
+  la copia de `Airflow/D60_REPORTING/` (ya iba desincronizada de
+  `ConsultasBigQuery/` en varios fixes anteriores, ver comentario en
+  `README.md` raíz), y ejecutar los `.sql` reales contra
+  `HCARB_GOLD_CLASIFICACION_FOLIO`/`HCARB_GOLD_VALIDACION_SAP` (afecta a
+  producción, requiere confirmación explícita antes de correrlo).
+
 ## Datasets (reutilizados, ninguno nuevo)
 
 - `D50_AGGREGATE_RENTABILIDAD` — tablas `HCARB_STG_*` (staging/dedupe).
@@ -140,6 +285,11 @@ y `HCARB_ESTATUS_SAT` (506 filas) se borraron con `DELETE` explícito.
 1. `HCARB_stg_vendors.sql`
 2. `HCARB_gold_clasificacion.sql` (depende de 1)
 3. `HCARB_gold_validacion_sap.sql` (depende de 2)
+
+`HCARB_gold_clasificacion_fer.sql`/`HCARB_gold_validacion_sap_fer.sql` (rama
+`Fer`, ago-2026) son variantes de prueba temporales de 2 y 3 — no forman
+parte de este orden real, escriben en tablas `_fer` aparte, ver "Estado de la
+rama `Fer`" más arriba.
 
 ![Linaje de tablas: fuentes → queries → HCARB_*](./linaje-tablas.png)
 
