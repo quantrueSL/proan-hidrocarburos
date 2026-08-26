@@ -4,6 +4,7 @@
 -- HCARB_gold_clasificacion.sql) sin tocar la tabla que lee producción. Backend local
 -- apunta aquí vía HCARB_FOLIO_TABLE en config/financialbi.env. Borrar este archivo y
 -- la tabla `_fer` cuando el cambio de fuente se confirme y se aplique a la tabla real.
+-- Dedup por UUID+concepto_idx (no por contenido) -- ver HCARB_gold_clasificacion.sql.
 DECLARE cutoff_fecha_negocio DATE DEFAULT '2026-01-01';
 
 CREATE OR REPLACE TABLE `proan-quantrue.D60_REPORTING.HCARB_GOLD_CLASIFICACION_FOLIO_fer` AS
@@ -12,8 +13,8 @@ WITH cfdis_dedup AS (
   FROM (
     SELECT *,
       ROW_NUMBER() OVER (
-        PARTITION BY UUID, ClaveProdServ, CAST(Cantidad AS STRING), CAST(Importe AS STRING), Descripcion
-        ORDER BY FechaTimbrado
+        PARTITION BY UUID, concepto_idx
+        ORDER BY _ingested_at DESC
       ) AS rn
     FROM `proan-quantrue.D30_INTEGRATION.cfdi_completo`
     WHERE ReceptorRfc = 'PAN921013AK7'

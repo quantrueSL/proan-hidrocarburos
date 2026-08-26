@@ -1,9 +1,11 @@
 -- Módulo 1 (clasificación): tabla grano UUID (factura completa).
 -- Universo (D1/D2, provisional): ReceptorRfc='PAN921013AK7' (Proteína Animal) y >=1 línea
 -- con ClaveProdServ de gas (151115xx producto, 83101600/83101601 GNC servicio).
--- Dedup obligatorio antes de sumar (hallazgo Fase 1 §18): (UUID, ClaveProdServ, Cantidad,
--- Importe, Descripcion) -- 24 de 1.051 facturas traen 2 filas exactas duplicadas del mismo
--- concepto.
+-- Dedup obligatorio antes de sumar (hallazgo Fase 1 §18): 24 de 1.051 facturas traían 2 filas
+-- exactas duplicadas del mismo concepto (cfdis, sin concepto_idx -- dedup por contenido:
+-- ClaveProdServ+Cantidad+Importe+Descripcion). Con cfdi_completo (ago-2026) el dedup pasa a
+-- ser por UUID+concepto_idx -- ver nota más abajo, el dedup por contenido ya no es seguro
+-- cuando una factura trae decenas de líneas.
 -- importe_gas parte de SubTotal (validado por el SAT), no de sumar Importe de línea --
 -- ver el FIX jul-2026 más abajo y Datos/naturaleza-de-los-datos.md. El "74% de facturas
 -- mixtas" que motivó originalmente sumar por línea (Fase 1 §16) resultó ser el mismo bug
@@ -55,8 +57,21 @@
 -- (277.489 vs 277.446 UUID, prácticamente igual) pero con casi el doble de líneas
 -- (543.759 vs 278.776) -- confirma que antes faltaban líneas, no que haya facturas nuevas.
 -- cfdi_completo trae además filas exactamente duplicadas por reingesta (1.675 pares
--- UUID+concepto_idx con contenido idéntico, mismo _id) -- el dedup de más abajo (por
--- UUID+ClaveProdServ+Cantidad+Importe+Descripcion) ya las absorbe sin cambios.
+-- UUID+concepto_idx con contenido idéntico, mismo _id).
+--
+-- Dedup por UUID+concepto_idx, NO por contenido (ago-2026): el dedup original (por
+-- ClaveProdServ+Cantidad+Importe+Descripcion) daba por hecho que dos líneas con esos 4
+-- valores iguales eran la misma línea reingresada -- válido con cfdis (1 línea/factura,
+-- nunca colisionaba) pero no con cfdi_completo, donde una factura trae hasta 49 líneas y
+-- es normal que dos conceptos DISTINTOS compartan producto+cantidad+precio+descripción
+-- (p.ej. dos entregas iguales el mismo día). Medido contra BigQuery real: 217/614 facturas
+-- de gas tenían colisiones así, perdiendo 1.273 líneas reales -- sin efecto en importe_gas
+-- ni es_mixta (0 facturas cambiaban, la colisión siempre caía dentro de la misma categoría
+-- gas/no-gas), pero sí en n_lineas_total/conceptos_gas (la evidencia auditable de M1).
+-- concepto_idx es el índice posicional real de la línea dentro del CFDI -- una reingesta
+-- duplica el mismo concepto_idx (mismo _id, confirmado), así que dedupear por
+-- UUID+concepto_idx (quedándonos con el _ingested_at más reciente) colapsa solo eso, nunca
+-- líneas legítimamente distintas.
 DECLARE cutoff_fecha_negocio DATE DEFAULT '2026-01-01';
 
 CREATE OR REPLACE TABLE `proan-quantrue.D60_REPORTING.HCARB_GOLD_CLASIFICACION_FOLIO` AS
@@ -65,8 +80,8 @@ WITH cfdis_dedup AS (
   FROM (
     SELECT *,
       ROW_NUMBER() OVER (
-        PARTITION BY UUID, ClaveProdServ, CAST(Cantidad AS STRING), CAST(Importe AS STRING), Descripcion
-        ORDER BY FechaTimbrado
+        PARTITION BY UUID, concepto_idx
+        ORDER BY _ingested_at DESC
       ) AS rn
     FROM `proan-quantrue.D30_INTEGRATION.cfdi_completo`
     WHERE ReceptorRfc = 'PAN921013AK7'
