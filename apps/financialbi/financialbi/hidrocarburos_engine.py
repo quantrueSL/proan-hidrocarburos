@@ -17,7 +17,8 @@ from financialbi.db import get_bq_client
 # definir, usa la tabla real de siempre.
 _FOLIO_TABLE = os.getenv("HCARB_FOLIO_TABLE", "proan-quantrue.D60_REPORTING.HCARB_GOLD_CLASIFICACION_FOLIO")
 _FOLIO = f"`{_FOLIO_TABLE}`"
-_SAP = "`proan-quantrue.D60_REPORTING.HCARB_GOLD_VALIDACION_SAP`"
+_SAP_TABLE = os.getenv("HCARB_SAP_TABLE", "proan-quantrue.D60_REPORTING.HCARB_GOLD_VALIDACION_SAP")
+_SAP = f"`{_SAP_TABLE}`"
 _VENDORS = "`proan-quantrue.D50_AGGREGATE_RENTABILIDAD.HCARB_STG_VENDORS`"
 
 SiteStatus = Literal["all", "with_site", "without_site"]

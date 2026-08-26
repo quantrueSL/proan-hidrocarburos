@@ -127,7 +127,9 @@ _SELECT_COLA = """
         s.estado_pago_sap, s.belnr_pago_sap, s.fecha_pago_sap,
         s.tipo_match_sitio, s.confianza_mseg,
         s.mseg_cantidad, s.mseg_valor_unitario, s.mseg_importe,
-        s.ceco_sugerido, s.ceco_sugerido_origen
+        s.ceco_sugerido, s.ceco_sugerido_origen,
+        -- Desglose por ticket de entrega (ago-2026): NULL si no hay documento MSEG emparejado.
+        s.tickets_mseg, s.mseg_n_tickets, s.mseg_n_tickets_match
 """
 
 

@@ -53,14 +53,33 @@ export type AprobacionInvoice = {
   mseg_cantidad: number | null;
   mseg_valor_unitario: number | null;
   mseg_importe: number | null;
-  // Sugerencia de CECO (patrón de proveedor de un solo sitio, o los KOSTL del documento
-  // MSEG que casó -- uno o varios separados por coma). Solo prellena, nunca bloquea.
+  // Desglose por ticket de entrega (cada línea del CFDI agrupada por NoIdentificacion,
+  // casada contra su línea ZEILE del documento MSEG). NULL si no hay documento emparejado.
+  tickets_mseg: AprobacionMsegTicket[] | null;
+  mseg_n_tickets: number | null;
+  mseg_n_tickets_match: number | null;
+  // Sugerencia de CECO (por ticket si TODOS casaron exacto, si no patrón de proveedor de
+  // un solo sitio, si no los KOSTL del documento MSEG que casó -- uno o varios separados
+  // por coma). Solo prellena, nunca bloquea.
   ceco_sugerido: string | null;
   // De dónde sale ceco_sugerido, para explicarlo en la UI (no solo mostrarlo):
-  // 'proveedor' = este proveedor siempre usa el mismo CECO (aplica aunque esta factura
-  // en concreto no tenga match MSEG); 'documento' = único CECO en el documento MSEG que
-  // casó; 'documento_multiple' = el documento reparte el gasto entre varios CECO.
-  ceco_sugerido_origen: "proveedor" | "documento" | "documento_multiple" | null;
+  // 'ticket' = TODOS los tickets de la factura casaron su ZEILE exacta (evidencia por
+  // entrega, la más precisa); 'proveedor' = este proveedor siempre usa el mismo CECO
+  // (aplica aunque esta factura en concreto no tenga match MSEG); 'documento' = único CECO
+  // en el documento MSEG que casó; 'documento_multiple' = el documento reparte el gasto
+  // entre varios CECO sin desglose por ticket.
+  ceco_sugerido_origen: "ticket" | "proveedor" | "documento" | "documento_multiple" | null;
+};
+
+export type AprobacionMsegTicket = {
+  ticket: string | null;
+  cantidad_ticket: number | null;
+  importe_ticket: number | null;
+  // NULL si este ticket en concreto no encontró su línea ZEILE (no bloquea el resto).
+  ceco: string | null;
+  cantidad_zeile: number | null;
+  importe_zeile: number | null;
+  match_exacto: boolean;
 };
 
 // Paginada igual que HydrocarburosSearchResponse (M1): 50 por página en vez de

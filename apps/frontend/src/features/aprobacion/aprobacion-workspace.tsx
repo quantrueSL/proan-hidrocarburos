@@ -55,10 +55,19 @@ const CONFIANZA_MSEG_LABEL: Record<string, string> = {
 // Explica de dónde sale ceco_sugerido -- no basta con mostrarlo, hay que decir por qué
 // (jul-2026, a petición explícita: "que aparezca algo tipo el CECO sale de MSEG...").
 const CECO_ORIGEN_LABEL: Record<string, string> = {
+  ticket: "Cada línea de la factura casó, importe a importe, con su propia recepción MSEG -- CECO exacto por entrega",
   proveedor: "Este proveedor siempre usa este CECO (sin necesitar recepción MSEG de esta factura)",
   documento: "Sale de la recepción MSEG que casó con esta factura",
   documento_multiple: "La recepción MSEG que casó reparte el gasto entre varios CECO -- confirma el que corresponda"
 };
+
+// NoIdentificacion trae el ticket/remito completo (p.ej. "LP/14561/DIST/PLA/2016-TIC14850357")
+// -- se muestra solo el último tramo (el folio del ticket), con el valor completo en el title.
+function ticketCorto(value: string | null) {
+  if (!value) return "—";
+  const partes = value.split(/[/-]/);
+  return partes[partes.length - 1] || value;
+}
 
 function formatDate(value: string | null) {
   return value ? date.format(new Date(`${value.slice(0, 10)}T12:00:00`)) : "—";
@@ -357,6 +366,25 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
               {selected.confianza_mseg ? <><dt>Cantidad</dt><dd>{selected.mseg_cantidad == null ? "—" : String(selected.mseg_cantidad)}</dd><dt>Importe</dt><dd>{formatMoney(selected.mseg_importe)}</dd></> : null}
               {selected.ceco_sugerido_origen ? <><dt>CECO sugerido</dt><dd>{CECO_ORIGEN_LABEL[selected.ceco_sugerido_origen]}</dd></> : null}
             </dl>
+            {selected.tickets_mseg && selected.tickets_mseg.length > 1 ? <div className="approval-tickets">
+              <p className="approval-tickets-title">
+                Desglose por ticket de entrega ({selected.mseg_n_tickets_match ?? 0} de {selected.mseg_n_tickets ?? selected.tickets_mseg.length} casan exacto)
+              </p>
+              <div className="approval-tickets-wrap"><table className="approval-tickets-table">
+                <thead><tr><th>Ticket</th><th>Cantidad</th><th>Importe</th><th>CECO</th></tr></thead>
+                <tbody>
+                  {selected.tickets_mseg.map((t, i) => {
+                    const cecoInfo = t.ceco ? cecoLabel(t.ceco, cecoNombrePorId) : null;
+                    return <tr className={t.match_exacto ? "" : "is-sin-match"} key={`${t.ticket}-${i}`}>
+                      <td title={t.ticket || undefined}>{ticketCorto(t.ticket)}</td>
+                      <td>{t.cantidad_ticket == null ? "—" : quantity.format(t.cantidad_ticket)}</td>
+                      <td>{formatMoney(t.importe_ticket)}</td>
+                      <td>{cecoInfo ? <span title={cecoInfo.completo}>{cecoInfo.corto}</span> : t.match_exacto ? "—" : "Sin match"}</td>
+                    </tr>;
+                  })}
+                </tbody>
+              </table></div>
+            </div> : null}
           </div> : null}
 
           {puedeEditar ? <div className="approval-form">
