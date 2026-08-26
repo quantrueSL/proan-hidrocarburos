@@ -67,6 +67,20 @@
 -- de INGESTA, no de modelo. La dirección física de planta SÍ existe en T001W y se expone
 -- ahora como `direccion_sitio` (la "Dirección de Consumo" de la Propuesta, para el WERKS
 -- resuelto ~58%).
+--
+-- Desglose por ticket de entrega (ago-2026, habilitado por D30_INTEGRATION.cfdi_completo):
+-- hasta ahora el match MSEG era 1 factura <-> 1 documento AGREGADO (SUM de todas sus ZEILE) --
+-- cuando el documento repartía el gasto entre varios CECO, la UI solo podía pedir "elige uno
+-- de estos N". `NoIdentificacion` en cada línea del CFDI resultó ser el ticket/remito de
+-- entrega -- agrupando las líneas de una factura por ese campo, cada ticket casa por importe
+-- Y cantidad EXACTOS (al centavo) contra una línea ZEILE del documento MSEG ya emparejado, y
+-- cada ZEILE trae su propio KOSTL. Verificado contra BigQuery real: 100% de match ticket-a-
+-- ticket en Corpo Gas (42/42 facturas), 91,7% promedio en Gas Noel (127/235 perfectas), 69-81%
+-- en 3 proveedores más -- 0% en 2 proveedores pequeños cuyo NoIdentificacion no sigue este
+-- patrón (no se fuerza el match ahí, tickets_mseg simplemente sale con match_exacto=false).
+-- Grano de las nuevas columnas: siguen siendo por factura (ARRAY anidado, no cambia el grano
+-- de la tabla) -- estado_sap/confianza_mseg no cambian, esto solo desglosa la evidencia y
+-- afina ceco_sugerido cuando el desglose es completo (ceco_sugerido_origen='ticket').
 
 CREATE OR REPLACE TABLE `proan-quantrue.D60_REPORTING.HCARB_GOLD_VALIDACION_SAP` AS
 WITH folios AS (
@@ -334,6 +348,56 @@ sitio_direccion AS (
     FROM `proan-quantrue.D00_SANDBOX.proan_T001W_*`
     GROUP BY WERKS
   )
+),
+
+-- (5) Desglose por ticket de entrega (ago-2026) -------------------------------------------
+-- Solo para facturas que ya tienen documento MSEG emparejado (mseg_match) -- el desglose no
+-- cambia si HAY corroboración, solo la afina cuando la hay.
+tickets_cfdi AS (
+  SELECT c.UUID AS uuid, c.NoIdentificacion AS ticket,
+    SUM(c.Cantidad) AS cantidad_ticket, ROUND(SUM(c.Importe), 2) AS importe_ticket
+  FROM `proan-quantrue.D30_INTEGRATION.cfdi_completo` c
+  WHERE c.UUID IN (SELECT uuid FROM mseg_match)
+    AND (c.ClaveProdServ LIKE '151115%' OR c.ClaveProdServ IN ('83101600', '83101601'))
+  GROUP BY c.UUID, c.NoIdentificacion
+),
+zeile_mseg AS (
+  SELECT mm.uuid, m.ZEILE, NULLIF(TRIM(m.KOSTL), '') AS kostl,
+    m.ERFMG AS cantidad_zeile, ROUND(m.DMBTR, 2) AS importe_zeile
+  FROM mseg_match mm
+  JOIN mseg_dedup m ON m.MBLNR = mm.MBLNR AND m.MJAHR = mm.MJAHR
+),
+-- Un ticket casa con la ZEILE cuyo importe está a <=$0.20 (misma tolerancia que match_importe
+-- en mseg_scored -- el redondeo entre SUM(Importe) del CFDI y DMBTR de MSEG deja el mismo
+-- ruido de <=1-2 centavos que ya obliga a esa tolerancia en el match a nivel documento;
+-- verificado en el barrido real: el ticket más grande de una factura fallaba por $0.01 con
+-- igualdad exacta). Si más de una ZEILE del mismo documento cae dentro de la tolerancia
+-- (raro), se queda con la más cercana -- no afecta el agregado del documento, solo a qué
+-- ZEILE en concreto se le atribuye este ticket.
+tickets_match AS (
+  SELECT t.uuid, t.ticket, t.cantidad_ticket, t.importe_ticket,
+    z.kostl AS ceco, z.cantidad_zeile, z.importe_zeile
+  FROM tickets_cfdi t
+  LEFT JOIN zeile_mseg z ON z.uuid = t.uuid AND ABS(z.importe_zeile - t.importe_ticket) <= 0.2
+  QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY t.uuid, t.ticket ORDER BY ABS(z.importe_zeile - t.importe_ticket), z.ZEILE
+  ) = 1
+),
+tickets_agg AS (
+  SELECT uuid,
+    COUNT(*) AS n_tickets,
+    COUNTIF(ceco IS NOT NULL) AS n_tickets_match,
+    STRING_AGG(DISTINCT ceco, ', ' ORDER BY ceco) AS cecos_tickets,
+    ARRAY_AGG(
+      STRUCT(
+        ticket, cantidad_ticket, importe_ticket,
+        ceco, cantidad_zeile, importe_zeile,
+        (ceco IS NOT NULL) AS match_exacto
+      )
+      ORDER BY importe_ticket DESC
+    ) AS tickets_mseg
+  FROM tickets_match
+  GROUP BY uuid
 )
 
 SELECT
@@ -364,15 +428,31 @@ SELECT
   mm.mseg_cantidad,
   mm.mseg_valor_unitario,
   mm.mseg_importe,
-  -- CECO sugerido: patrón de proveedor de un solo sitio si existe, si no los KOSTL del
-  -- documento MSEG que casó (uno o varios, separados por coma). NULL si nada aplica --
-  -- el campo sigue 100% editable en la UI, esto solo prellena (D22 pendiente de revisar).
-  COALESCE(cpp.ceco_proveedor, cd.cecos_documento) AS ceco_sugerido,
+  -- Desglose por ticket de entrega (ago-2026): NULL si la factura no tiene documento MSEG
+  -- emparejado. match_exacto=false en un ticket concreto no bloquea nada -- es señal de que
+  -- ese ticket no encontró su ZEILE (proveedor cuyo NoIdentificacion no sigue el patrón, o
+  -- caso real de recepción consolidada), el resto de la evidencia (confianza_mseg, etc.)
+  -- sigue siendo válida igual.
+  ta.tickets_mseg,
+  ta.n_tickets AS mseg_n_tickets,
+  ta.n_tickets_match AS mseg_n_tickets_match,
+  -- CECO sugerido: por ticket si TODOS casaron exacto (más preciso, evidencia real por
+  -- entrega); si no, patrón de proveedor de un solo sitio; si no, los KOSTL del documento
+  -- MSEG que casó (uno o varios, separados por coma). NULL si nada aplica -- el campo sigue
+  -- 100% editable en la UI, esto solo prellena (D22 pendiente de revisar).
+  COALESCE(
+    IF(ta.n_tickets > 1 AND ta.n_tickets_match = ta.n_tickets, ta.cecos_tickets, NULL),
+    cpp.ceco_proveedor,
+    cd.cecos_documento
+  ) AS ceco_sugerido,
   -- Origen de la sugerencia (jul-2026, para explicarla en la UI, no solo mostrarla):
-  -- 'proveedor' = proveedor de un solo sitio (aplica a TODAS sus facturas, con o sin match);
-  -- 'documento' = un único KOSTL en el documento MSEG que casó esta factura;
-  -- 'documento_multiple' = el documento reparte el gasto entre varios KOSTL, hay que elegir.
+  -- 'ticket' = TODOS los tickets de la factura casaron su ZEILE exacta (evidencia por
+  -- entrega, la más precisa); 'proveedor' = proveedor de un solo sitio (aplica a TODAS sus
+  -- facturas, con o sin match); 'documento' = un único KOSTL en el documento MSEG que casó
+  -- esta factura; 'documento_multiple' = el documento reparte el gasto entre varios KOSTL sin
+  -- desglose por ticket, hay que elegir.
   CASE
+    WHEN ta.n_tickets > 1 AND ta.n_tickets_match = ta.n_tickets THEN 'ticket'
     WHEN cpp.ceco_proveedor IS NOT NULL THEN 'proveedor'
     WHEN cd.n_cecos_documento = 1 THEN 'documento'
     WHEN cd.n_cecos_documento > 1 THEN 'documento_multiple'
@@ -386,4 +466,5 @@ LEFT JOIN `proan-quantrue.D20_DIMENSION.dm_centros` ce ON st.werks = ce.id_centr
 LEFT JOIN sitio_direccion td ON st.werks = td.werks
 LEFT JOIN mseg_match mm ON f.uuid = mm.uuid
 LEFT JOIN ceco_por_proveedor cpp ON cpp.proveedor_key = f.proveedor_key
-LEFT JOIN ceco_por_documento cd ON cd.MBLNR = mm.MBLNR AND cd.MJAHR = mm.MJAHR;
+LEFT JOIN ceco_por_documento cd ON cd.MBLNR = mm.MBLNR AND cd.MJAHR = mm.MJAHR
+LEFT JOIN tickets_agg ta ON ta.uuid = f.uuid;
