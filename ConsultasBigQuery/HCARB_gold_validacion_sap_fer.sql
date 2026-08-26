@@ -288,12 +288,12 @@ SELECT
   ta.n_tickets AS mseg_n_tickets,
   ta.n_tickets_match AS mseg_n_tickets_match,
   COALESCE(
-    IF(ta.n_tickets > 1 AND ta.n_tickets_match = ta.n_tickets, ta.cecos_tickets, NULL),
+    IF(ta.n_tickets >= 1 AND ta.n_tickets_match = ta.n_tickets, ta.cecos_tickets, NULL),
     cpp.ceco_proveedor,
     cd.cecos_documento
   ) AS ceco_sugerido,
   CASE
-    WHEN ta.n_tickets > 1 AND ta.n_tickets_match = ta.n_tickets THEN 'ticket'
+    WHEN ta.n_tickets >= 1 AND ta.n_tickets_match = ta.n_tickets THEN 'ticket'
     WHEN cpp.ceco_proveedor IS NOT NULL THEN 'proveedor'
     WHEN cd.n_cecos_documento = 1 THEN 'documento'
     WHEN cd.n_cecos_documento > 1 THEN 'documento_multiple'

@@ -453,23 +453,28 @@ SELECT
   ta.tickets_mseg,
   ta.n_tickets AS mseg_n_tickets,
   ta.n_tickets_match AS mseg_n_tickets_match,
-  -- CECO sugerido: por ticket si TODOS casaron exacto (más preciso, evidencia real por
-  -- entrega); si no, patrón de proveedor de un solo sitio; si no, los KOSTL del documento
-  -- MSEG que casó (uno o varios, separados por coma). NULL si nada aplica -- el campo sigue
-  -- 100% editable en la UI, esto solo prellena (D22 pendiente de revisar).
+  -- CECO sugerido: por ticket si TODOS casaron exacto -- incluye facturas con un solo ticket
+  -- (ago-2026, D33: antes exigía >1 ticket, pero una factura con 1 sola línea de gas que casó
+  -- exacto contra su ZEILE es evidencia igual de fuerte, y más precisa que "proveedor" o
+  -- "documento_multiple" -- medido: 3 facturas que caían en documento_multiple con un único
+  -- ticket exacto, 34 que usaban el patrón de proveedor pudiendo usar la evidencia real de
+  -- esta factura en concreto). Si no hay ticket, patrón de proveedor de un solo sitio; si no,
+  -- los KOSTL del documento MSEG que casó (uno o varios, separados por coma). NULL si nada
+  -- aplica -- el campo sigue 100% editable en la UI, esto solo prellena (D22 pendiente de
+  -- revisar).
   COALESCE(
-    IF(ta.n_tickets > 1 AND ta.n_tickets_match = ta.n_tickets, ta.cecos_tickets, NULL),
+    IF(ta.n_tickets >= 1 AND ta.n_tickets_match = ta.n_tickets, ta.cecos_tickets, NULL),
     cpp.ceco_proveedor,
     cd.cecos_documento
   ) AS ceco_sugerido,
   -- Origen de la sugerencia (jul-2026, para explicarla en la UI, no solo mostrarla):
-  -- 'ticket' = TODOS los tickets de la factura casaron su ZEILE exacta (evidencia por
-  -- entrega, la más precisa); 'proveedor' = proveedor de un solo sitio (aplica a TODAS sus
-  -- facturas, con o sin match); 'documento' = un único KOSTL en el documento MSEG que casó
-  -- esta factura; 'documento_multiple' = el documento reparte el gasto entre varios KOSTL sin
-  -- desglose por ticket, hay que elegir.
+  -- 'ticket' = TODOS los tickets de gas de la factura (uno o varios) casaron su ZEILE exacta
+  -- (evidencia por entrega, la más precisa); 'proveedor' = proveedor de un solo sitio (aplica
+  -- a TODAS sus facturas, con o sin match); 'documento' = un único KOSTL en el documento MSEG
+  -- que casó esta factura; 'documento_multiple' = el documento reparte el gasto entre varios
+  -- KOSTL sin desglose por ticket, hay que elegir.
   CASE
-    WHEN ta.n_tickets > 1 AND ta.n_tickets_match = ta.n_tickets THEN 'ticket'
+    WHEN ta.n_tickets >= 1 AND ta.n_tickets_match = ta.n_tickets THEN 'ticket'
     WHEN cpp.ceco_proveedor IS NOT NULL THEN 'proveedor'
     WHEN cd.n_cecos_documento = 1 THEN 'documento'
     WHEN cd.n_cecos_documento > 1 THEN 'documento_multiple'
