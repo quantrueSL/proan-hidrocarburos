@@ -430,8 +430,18 @@ SELECT
   ce.descripcion_centro AS sitio_consumo,
   td.direccion_sitio,
   st.tipo_match_sitio,
-  -- Corroboración MSEG.
-  mm.confianza_mseg,
+  -- Corroboración MSEG. confianza_mseg de mm compara el documento COMPLETO (todas sus ZEILE)
+  -- contra el importe_gas de la factura -- si el documento consolida otras entregas/facturas
+  -- (caso real, no un bug: un mismo documento SAP puede cubrir varios CFDIs), ese agregado
+  -- nunca va a reconciliar aunque la factura esté perfectamente corroborada. El desglose por
+  -- ticket (más abajo) da evidencia más fuerte, línea a línea: si TODOS los tickets de gas de
+  -- ESTA factura encontraron su propia ZEILE (ta.n_tickets_match = ta.n_tickets), sube a
+  -- 'Alta' aunque el agregado del documento no cuadre -- nunca baja un 'Alta' que ya tenía
+  -- por el match de documento (el CASE solo puede subir, no bajar).
+  CASE
+    WHEN ta.n_tickets >= 1 AND ta.n_tickets_match = ta.n_tickets THEN 'Alta'
+    ELSE mm.confianza_mseg
+  END AS confianza_mseg,
   mm.mseg_cantidad,
   mm.mseg_valor_unitario,
   mm.mseg_importe,

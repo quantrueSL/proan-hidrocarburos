@@ -277,7 +277,10 @@ SELECT
   ce.descripcion_centro AS sitio_consumo,
   td.direccion_sitio,
   st.tipo_match_sitio,
-  mm.confianza_mseg,
+  CASE
+    WHEN ta.n_tickets >= 1 AND ta.n_tickets_match = ta.n_tickets THEN 'Alta'
+    ELSE mm.confianza_mseg
+  END AS confianza_mseg,
   mm.mseg_cantidad,
   mm.mseg_valor_unitario,
   mm.mseg_importe,
