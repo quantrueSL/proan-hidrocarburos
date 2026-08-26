@@ -45,6 +45,18 @@
 -- ~jun-2025 (Fase 1 §19.5) -- ~7 meses que MSEG nunca podrá validar porque el dato no existe
 -- en SAP para ese rango. Se corta aquí (único punto, todo lo demás hereda vía JOIN/lectura
 -- de esta tabla) exigiendo FechaTimbrado Y Fecha >= el cutoff, no solo uno de los dos.
+--
+-- Fuente D30_INTEGRATION.cfdi_completo (ago-2026, reemplaza D00_SANDBOX.cfdis): cfdis
+-- venía incompleta -- para 414/547 facturas del universo de gas solo traía 1 línea (de gas)
+-- aunque SubTotal exigiera más (ver el FIX "importe_gas" más abajo, que hasta ahora
+-- compensaba esa carencia restando desde SubTotal en vez de sumar líneas). cfdi_completo
+-- trae TODAS las líneas por factura (grano UUID+concepto_idx, mismas columnas que cfdis).
+-- Verificado contra BigQuery real (ago-2026): mismo universo de facturas del receptor
+-- (277.489 vs 277.446 UUID, prácticamente igual) pero con casi el doble de líneas
+-- (543.759 vs 278.776) -- confirma que antes faltaban líneas, no que haya facturas nuevas.
+-- cfdi_completo trae además filas exactamente duplicadas por reingesta (1.675 pares
+-- UUID+concepto_idx con contenido idéntico, mismo _id) -- el dedup de más abajo (por
+-- UUID+ClaveProdServ+Cantidad+Importe+Descripcion) ya las absorbe sin cambios.
 DECLARE cutoff_fecha_negocio DATE DEFAULT '2026-01-01';
 
 CREATE OR REPLACE TABLE `proan-quantrue.D60_REPORTING.HCARB_GOLD_CLASIFICACION_FOLIO` AS
@@ -56,7 +68,7 @@ WITH cfdis_dedup AS (
         PARTITION BY UUID, ClaveProdServ, CAST(Cantidad AS STRING), CAST(Importe AS STRING), Descripcion
         ORDER BY FechaTimbrado
       ) AS rn
-    FROM `proan-quantrue.D00_SANDBOX.cfdis`
+    FROM `proan-quantrue.D30_INTEGRATION.cfdi_completo`
     WHERE ReceptorRfc = 'PAN921013AK7'
       AND DATE(FechaTimbrado) >= cutoff_fecha_negocio
       AND DATE(Fecha) >= cutoff_fecha_negocio

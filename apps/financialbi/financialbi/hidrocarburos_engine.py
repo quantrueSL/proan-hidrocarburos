@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from typing import Any, Literal
@@ -10,7 +11,12 @@ from google.cloud import bigquery
 
 from financialbi.db import get_bq_client
 
-_FOLIO = "`proan-quantrue.D60_REPORTING.HCARB_GOLD_CLASIFICACION_FOLIO`"
+# HCARB_FOLIO_TABLE permite apuntar a una tabla alterna (p.ej. un
+# HCARB_GOLD_CLASIFICACION_FOLIO_fer de prueba) sin tocar la de producción --
+# solo para comparar en local mientras se valida una fuente cfdis nueva. Sin
+# definir, usa la tabla real de siempre.
+_FOLIO_TABLE = os.getenv("HCARB_FOLIO_TABLE", "proan-quantrue.D60_REPORTING.HCARB_GOLD_CLASIFICACION_FOLIO")
+_FOLIO = f"`{_FOLIO_TABLE}`"
 _SAP = "`proan-quantrue.D60_REPORTING.HCARB_GOLD_VALIDACION_SAP`"
 _VENDORS = "`proan-quantrue.D50_AGGREGATE_RENTABILIDAD.HCARB_STG_VENDORS`"
 
