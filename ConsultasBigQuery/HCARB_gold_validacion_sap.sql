@@ -245,30 +245,36 @@ mseg_doc AS (
 ),
 -- Score por documento-candidato (mismo patrón que match_sap_numerico/sitio_numerico):
 -- folio exacto=4, folio numérico-fallback=3 (rescata prefijo distinto, ej. "F"/"CFDI"),
--- importe exacto (2 decimales)=3, importe relajado (1 decimal)=1. Ventana ±120 días --
+-- importe exacto (tolerancia_importe)=3, importe relajado (1 decimal)=1. Ventana ±120 días --
 -- verificado que hacen falta: hay matches reales (folio+importe exactos) hasta 92 días
 -- de diferencia entre la fecha de la factura y la fecha en que SAP registra la recepción.
+--
+-- Tolerancia RELATIVA (ago-2026, reemplaza el $0.20 fijo de jul-2026): con cfdi_completo,
+-- el ruido entre doc_importe (MSEG) e importe_gas (CFDI) para una misma entrega deja de ser
+-- un puñado de centavos fijos y escala con el importe -- medido contra BigQuery real (497
+-- facturas con folio exacto): 41 quedaban en 'Media' con el $0.20 fijo pese a que su
+-- diferencia es un 0.0174-0.0181% MUY consistente del importe (p.ej. $0.24 en una factura de
+-- $1.369, $1.88 en una de $10.629 -- mismo ~0.018%, no ruido aleatorio: probablemente una
+-- diferencia de redondeo del precio unitario entre CFDI y SAP). Justo por encima hay un hueco
+-- limpio: los siguientes casos ya son documentos genuinamente distintos (recepción consolidada
+-- de varias entregas), empezando en 0.06% -- 3x el techo del ruido real. tolerancia_importe
+-- usa GREATEST con el $0.20 fijo para no exigir menos que antes en facturas pequeñas (0.03% de
+-- $50 son 1.5 centavos, demasiado poco).
 mseg_scored AS (
   SELECT
     f.uuid, m.MBLNR, m.MJAHR, m.doc_importe, m.doc_cantidad,
+    GREATEST(0.2, 0.0003 * f.importe_gas) AS tolerancia_importe,
     (
       CASE WHEN m.folio_key_mseg = f.folio_key THEN 4
            WHEN LENGTH(f.folio_numero) >= 5 AND m.folio_numero_mseg = f.folio_numero THEN 3
            ELSE 0 END
-      -- Tolerancia de $0.20 MXN (jul-2026, post-fix importe_gas -- ambos importes,
-      -- doc_importe y importe_gas, están en pesos, DMBTR/SubTotal de moneda local, nunca
-      -- en dólares): el fix de importe_gas (SubTotal - no-gas) deja una diferencia residual
-      -- de ruido de redondeo (mediana -$0.01, rango -$0.03 a -$0.01 entre doc_importe y
-      -- importe_gas) que el exacto a 2 decimales no perdona -- confirmado contra BigQuery
-      -- real: 0/334 Media pasaban el exacto pese a que la mediana del ratio es 1.0. $0.20
-      -- cubre ese ruido sin abrir la puerta a colar un importe realmente distinto.
-      + CASE WHEN ABS(m.doc_importe - f.importe_gas) <= 0.2 THEN 3
+      + CASE WHEN ABS(m.doc_importe - f.importe_gas) <= GREATEST(0.2, 0.0003 * f.importe_gas) THEN 3
              WHEN ROUND(m.doc_importe, 1) = ROUND(f.importe_gas, 1) THEN 1
              ELSE 0 END
     ) AS score,
     (m.folio_key_mseg = f.folio_key
      OR (LENGTH(f.folio_numero) >= 5 AND m.folio_numero_mseg = f.folio_numero)) AS match_folio,
-    (ABS(m.doc_importe - f.importe_gas) <= 0.2) AS match_importe,
+    (ABS(m.doc_importe - f.importe_gas) <= GREATEST(0.2, 0.0003 * f.importe_gas)) AS match_importe,
     ABS(DATE_DIFF(DATE(f.fecha), m.fecha_mseg, DAY)) AS dias_diferencia
   FROM folios f
   JOIN mseg_doc m
@@ -367,18 +373,19 @@ zeile_mseg AS (
   FROM mseg_match mm
   JOIN mseg_dedup m ON m.MBLNR = mm.MBLNR AND m.MJAHR = mm.MJAHR
 ),
--- Un ticket casa con la ZEILE cuyo importe está a <=$0.20 (misma tolerancia que match_importe
--- en mseg_scored -- el redondeo entre SUM(Importe) del CFDI y DMBTR de MSEG deja el mismo
--- ruido de <=1-2 centavos que ya obliga a esa tolerancia en el match a nivel documento;
--- verificado en el barrido real: el ticket más grande de una factura fallaba por $0.01 con
--- igualdad exacta). Si más de una ZEILE del mismo documento cae dentro de la tolerancia
--- (raro), se queda con la más cercana -- no afecta el agregado del documento, solo a qué
--- ZEILE en concreto se le atribuye este ticket.
+-- Un ticket casa con la ZEILE cuyo importe está dentro de la misma tolerancia relativa que
+-- match_importe en mseg_scored (ver comentario ahí, ago-2026) -- el mismo ruido de redondeo
+-- de precio unitario que afecta al agregado del documento afecta también, proporcionalmente,
+-- a cada ticket individual. Si más de una ZEILE del mismo documento cae dentro de la
+-- tolerancia (raro), se queda con la más cercana -- no afecta el agregado del documento,
+-- solo a qué ZEILE en concreto se le atribuye este ticket.
 tickets_match AS (
   SELECT t.uuid, t.ticket, t.cantidad_ticket, t.importe_ticket,
     z.kostl AS ceco, z.cantidad_zeile, z.importe_zeile
   FROM tickets_cfdi t
-  LEFT JOIN zeile_mseg z ON z.uuid = t.uuid AND ABS(z.importe_zeile - t.importe_ticket) <= 0.2
+  LEFT JOIN zeile_mseg z
+    ON z.uuid = t.uuid
+    AND ABS(z.importe_zeile - t.importe_ticket) <= GREATEST(0.2, 0.0003 * t.importe_ticket)
   QUALIFY ROW_NUMBER() OVER (
     PARTITION BY t.uuid, t.ticket ORDER BY ABS(z.importe_zeile - t.importe_ticket), z.ZEILE
   ) = 1

@@ -147,13 +147,13 @@ mseg_scored AS (
       CASE WHEN m.folio_key_mseg = f.folio_key THEN 4
            WHEN LENGTH(f.folio_numero) >= 5 AND m.folio_numero_mseg = f.folio_numero THEN 3
            ELSE 0 END
-      + CASE WHEN ABS(m.doc_importe - f.importe_gas) <= 0.2 THEN 3
+      + CASE WHEN ABS(m.doc_importe - f.importe_gas) <= GREATEST(0.2, 0.0003 * f.importe_gas) THEN 3
              WHEN ROUND(m.doc_importe, 1) = ROUND(f.importe_gas, 1) THEN 1
              ELSE 0 END
     ) AS score,
     (m.folio_key_mseg = f.folio_key
      OR (LENGTH(f.folio_numero) >= 5 AND m.folio_numero_mseg = f.folio_numero)) AS match_folio,
-    (ABS(m.doc_importe - f.importe_gas) <= 0.2) AS match_importe,
+    (ABS(m.doc_importe - f.importe_gas) <= GREATEST(0.2, 0.0003 * f.importe_gas)) AS match_importe,
     ABS(DATE_DIFF(DATE(f.fecha), m.fecha_mseg, DAY)) AS dias_diferencia
   FROM folios f
   JOIN mseg_doc m
@@ -233,7 +233,9 @@ tickets_match AS (
   SELECT t.uuid, t.ticket, t.cantidad_ticket, t.importe_ticket,
     z.kostl AS ceco, z.cantidad_zeile, z.importe_zeile
   FROM tickets_cfdi t
-  LEFT JOIN zeile_mseg z ON z.uuid = t.uuid AND ABS(z.importe_zeile - t.importe_ticket) <= 0.2
+  LEFT JOIN zeile_mseg z
+    ON z.uuid = t.uuid
+    AND ABS(z.importe_zeile - t.importe_ticket) <= GREATEST(0.2, 0.0003 * t.importe_ticket)
   QUALIFY ROW_NUMBER() OVER (
     PARTITION BY t.uuid, t.ticket ORDER BY ABS(z.importe_zeile - t.importe_ticket), z.ZEILE
   ) = 1
