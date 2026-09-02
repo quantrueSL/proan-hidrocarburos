@@ -37,6 +37,7 @@ from typing import Any
 import requests
 from google.cloud import bigquery
 
+from financialbi.aprobacion_engine import _APROBACION
 from financialbi.db import get_bq_client
 from financialbi.hidrocarburos_engine import _FOLIO
 
@@ -50,7 +51,6 @@ _RECHEQUEO_DIAS = 7
 
 _ESTATUS_SAT_TABLE = "proan-quantrue.D60_REPORTING.HCARB_ESTATUS_SAT"
 _ESTATUS_SAT = f"`{_ESTATUS_SAT_TABLE}`"
-_APROBACION = "`proan-quantrue.D60_REPORTING.HCARB_gold_aprobacion`"
 
 _SCHEMA_DDL = f"""
 CREATE TABLE IF NOT EXISTS {_ESTATUS_SAT} (

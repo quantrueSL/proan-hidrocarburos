@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { FiltersSidebar } from "@/components/filters-sidebar";
-import type { AprobacionFiltros, AprobacionInvoice, AprobacionOption, AprobacionQueue, AprobacionSearch } from "@/types/aprobacion";
+import type { AprobacionCecoPorTicket, AprobacionFiltros, AprobacionInvoice, AprobacionMsegTicket, AprobacionOption, AprobacionQueue, AprobacionSearch } from "@/types/aprobacion";
 
 type Role = "compras" | "gerencia" | "historial";
 type Props = {
@@ -97,6 +97,37 @@ function cecoLabel(raw: string | null | undefined, catalogo: Map<string, string>
   };
 }
 
+// Cuando la factura reparte gasto entre varios CECO reales (ago-2026), agrupa
+// tickets_mseg por su CECO sugerido -- una fila por grupo, no por ticket
+// individual (una factura de 69 tickets puede tener solo 14 CECOs distintos).
+// Tickets sin ZEILE emparejada (ceco null) van a un grupo aparte "sin sugerencia".
+const SIN_SUGERENCIA = "__sin_sugerencia__";
+type CecoGrupo = { key: string; ceco: string | null; importe: number; tickets: AprobacionMsegTicket[] };
+
+function agruparPorCeco(tickets: AprobacionMsegTicket[] | null | undefined): CecoGrupo[] {
+  const grupos = new Map<string, CecoGrupo>();
+  for (const t of tickets || []) {
+    const key = t.ceco || SIN_SUGERENCIA;
+    const grupo = grupos.get(key);
+    if (grupo) { grupo.importe += t.importe_ticket || 0; grupo.tickets.push(t); }
+    else grupos.set(key, { key, ceco: t.ceco, importe: t.importe_ticket || 0, tickets: [t] });
+  }
+  return Array.from(grupos.values());
+}
+
+// Prellena cada grupo con el CECO ya confirmado (si se está reeditando una factura
+// con ceco_por_ticket capturado) o, si no, con el CECO sugerido del propio grupo --
+// mismo criterio que "el CECO ya capturado manda siempre" del campo único.
+function initCecoPorGrupo(grupos: CecoGrupo[], cecoPorTicket: AprobacionCecoPorTicket[] | null | undefined): Record<string, string> {
+  const confirmado = new Map((cecoPorTicket || []).map((c) => [c.ticket, c.ceco]));
+  const result: Record<string, string> = {};
+  for (const grupo of grupos) {
+    const ticketConfirmado = grupo.tickets.find((t) => confirmado.has(t.ticket));
+    result[grupo.key] = (ticketConfirmado && confirmado.get(ticketConfirmado.ticket)) || grupo.ceco || "";
+  }
+  return result;
+}
+
 function readError(response: Response, fallback: string) {
   return response.json().then((body: { detail?: string }) => body.detail || fallback).catch(() => fallback);
 }
@@ -139,6 +170,9 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
   const [historial, setHistorial] = useState(initialHistorial);
   const [selected, setSelected] = useState<AprobacionInvoice | null>(null);
   const [ceco, setCeco] = useState("");
+  // Modo "varios CECO" (ago-2026): un valor editable por grupo de tickets con el mismo
+  // CECO sugerido, en vez de un solo campo -- ver agruparPorCeco/initCecoPorGrupo arriba.
+  const [cecoPorGrupo, setCecoPorGrupo] = useState<Record<string, string>>({});
   const [werks, setWerks] = useState("");
   const [comment, setComment] = useState("");
   const [rejecting, setRejecting] = useState(false);
@@ -180,7 +214,38 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
     // El CECO ya capturado manda siempre; si no hay, se prellena con la sugerencia
     // (patrón de proveedor o KOSTL del documento MSEG) -- sigue siendo editable, nunca bloquea.
     setSelected(next); setCeco(next.ceco || next.ceco_sugerido || ""); setWerks(next.werks_manual || next.werks || "");
+    setCecoPorGrupo(initCecoPorGrupo(agruparPorCeco(next.tickets_mseg), next.ceco_por_ticket));
     setComment(""); setRejecting(false); setReopening(false);
+  }
+
+  // Modo "varios CECO" (ago-2026): más de 1 grupo distinto de tickets_mseg significa que
+  // la factura reparte gasto entre varios CECO reales (o entre un CECO real y tickets sin
+  // evidencia) -- se pide confirmar un CECO por grupo en vez de un solo campo. 0 o 1 grupo
+  // (sin evidencia MSEG, o toda la evidencia apunta al mismo CECO) deja el campo único de
+  // siempre, sin cambios visibles.
+  const gruposCeco = useMemo(() => agruparPorCeco(selected?.tickets_mseg), [selected]);
+  const modoMultiCeco = gruposCeco.length > 1;
+  // CECO ya confirmado por ticket (si se reeditó la factura) -- para la tabla de solo
+  // lectura de "Evidencia MSEG", que debe mostrar la decisión real, no solo la sugerencia.
+  const cecoConfirmadoPorTicket = useMemo(
+    () => new Map((selected?.ceco_por_ticket || []).map((c) => [c.ticket || "", c.ceco])),
+    [selected]
+  );
+  const puedeEnviarCeco = modoMultiCeco
+    ? gruposCeco.every((grupo) => (cecoPorGrupo[grupo.key] || "").trim())
+    : Boolean(ceco.trim());
+
+  // Expande cada grupo confirmado a sus tickets individuales (uno por fila de
+  // ceco_por_ticket) y deriva el `ceco` legado: único valor si todos los grupos
+  // terminan con el mismo CECO, si no, lista separada por coma (mismo formato que
+  // ceco_sugerido) -- para las vistas que solo leen ese campo.
+  function construirCapturaCeco(): { ceco: string; ceco_por_ticket: AprobacionCecoPorTicket[] | null } {
+    if (!modoMultiCeco) return { ceco: ceco.trim(), ceco_por_ticket: null };
+    const items = gruposCeco.flatMap((grupo) => grupo.tickets.map((t) => ({
+      ticket: t.ticket, ceco: (cecoPorGrupo[grupo.key] || "").trim(), importe_ticket: t.importe_ticket
+    })));
+    const distintos = Array.from(new Set(items.map((item) => item.ceco))).sort();
+    return { ceco: distintos.length === 1 ? distintos[0] : distintos.join(", "), ceco_por_ticket: items };
   }
 
   function applyQueue(r: Role, next: AprobacionQueue) {
@@ -217,8 +282,8 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
 
   async function submit(action: "validar" | "aprobar" | "rechazar" | "reabrir") {
     if (!selected || busy) return;
-    if (action === "validar" && !ceco.trim()) {
-      setError("Indica el CECO antes de enviar a Gerencia."); return;
+    if (action === "validar" && !puedeEnviarCeco) {
+      setError(modoMultiCeco ? "Indica el CECO de cada grupo antes de enviar a Gerencia." : "Indica el CECO antes de enviar a Gerencia."); return;
     }
     if ((action === "rechazar" || action === "reabrir") && !comment.trim()) {
       setError(action === "reabrir" ? "Indica el motivo de la reapertura." : "Indica el motivo del rechazo."); return;
@@ -228,7 +293,7 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
     // (app/api/.../aprobacion/[...path]/route.ts). El cliente no puede firmar
     // una decisión con el nombre de otro.
     const payload = action === "validar"
-      ? { ceco: ceco.trim(), werks_manual: werks.trim() || null, comentario: comment.trim() || null }
+      ? { ...construirCapturaCeco(), werks_manual: werks.trim() || null, comentario: comment.trim() || null }
       : action === "aprobar"
         ? { comentario: comment.trim() || null }
         : { motivo: comment.trim() };
@@ -368,7 +433,7 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
               {selected.confianza_mseg ? <><dt>Cantidad</dt><dd>{selected.mseg_cantidad == null ? "—" : String(selected.mseg_cantidad)}</dd><dt>Importe</dt><dd>{formatMoney(selected.mseg_importe)}</dd></> : null}
               {selected.ceco_sugerido_origen ? <><dt>CECO sugerido</dt><dd>{CECO_ORIGEN_LABEL[selected.ceco_sugerido_origen]}</dd></> : null}
             </dl>
-            {selected.tickets_mseg && selected.tickets_mseg.length > 1 ? <div className="approval-tickets">
+            {selected.tickets_mseg && selected.tickets_mseg.length > 0 ? <div className="approval-tickets">
               <p className="approval-tickets-title">
                 Desglose por ticket de entrega ({selected.mseg_n_tickets_match ?? 0} de {selected.mseg_n_tickets ?? selected.tickets_mseg.length} casan exacto)
               </p>
@@ -376,7 +441,11 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
                 <thead><tr><th>Ticket</th><th>Cantidad</th><th>Importe</th><th>CECO</th></tr></thead>
                 <tbody>
                   {selected.tickets_mseg.map((t, i) => {
-                    const cecoInfo = t.ceco ? cecoLabel(t.ceco, cecoNombrePorId) : null;
+                    // Si Compras ya confirmó un CECO por ticket, se muestra ese en vez del
+                    // simplemente sugerido -- para que Gerencia/Historial revisen la decisión
+                    // real, no solo la evidencia automática.
+                    const cecoAMostrar = cecoConfirmadoPorTicket.get(t.ticket || "") ?? t.ceco;
+                    const cecoInfo = cecoAMostrar ? cecoLabel(cecoAMostrar, cecoNombrePorId) : null;
                     return <tr className={t.match_exacto ? "" : "is-sin-match"} key={`${t.ticket}-${i}`}>
                       <td title={t.ticket || undefined}>{ticketCorto(t.ticket)}</td>
                       <td>{t.cantidad_ticket == null ? "—" : quantity.format(t.cantidad_ticket)}</td>
@@ -390,9 +459,24 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
           </div> : null}
 
           {puedeEditar ? <div className="approval-form">
-            <Field label="CECO">
+            {modoMultiCeco ? <div className="approval-field approval-ceco-grupos">
+              <span>CECO por ticket ({gruposCeco.length} grupos)</span>
+              <div className="approval-tickets-wrap"><table className="approval-tickets-table approval-ceco-grupos-table">
+                <thead><tr><th>CECO sugerido</th><th>Tickets</th><th>Importe</th><th>CECO a confirmar</th></tr></thead>
+                <tbody>
+                  {gruposCeco.map((grupo) => {
+                    const info = grupo.ceco ? cecoLabel(grupo.ceco, cecoNombrePorId) : null;
+                    return <tr key={grupo.key}>
+                      <td>{info ? <span title={info.completo}>{info.corto}</span> : "Sin sugerencia"}</td>
+                      <td>{grupo.tickets.length}</td>
+                      <td>{formatMoney(grupo.importe)}</td>
+                      <td><input list="approval-cecos" onChange={(event) => setCecoPorGrupo((prev) => ({ ...prev, [grupo.key]: event.target.value }))} placeholder="Obligatorio" value={cecoPorGrupo[grupo.key] || ""} /></td>
+                    </tr>;
+                  })}
+                </tbody>
+              </table></div>
+            </div> : <Field label="CECO">
               <input list="approval-cecos" onChange={(event) => setCeco(event.target.value)} placeholder="Obligatorio" value={ceco} />
-              <datalist id="approval-cecos">{cecos.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</datalist>
               {(() => {
                 const info = cecoLabel(ceco, cecoNombrePorId);
                 const coincideConSugerido = Boolean(selected.ceco_sugerido) && ceco.trim() === selected.ceco_sugerido;
@@ -401,7 +485,8 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
                   {coincideConSugerido && selected.ceco_sugerido_origen ? <small className="approval-field-hint approval-field-hint-origen">{CECO_ORIGEN_LABEL[selected.ceco_sugerido_origen]}</small> : null}
                 </>;
               })()}
-            </Field>
+            </Field>}
+            <datalist id="approval-cecos">{cecos.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</datalist>
             <Field label="Centro"><input list="approval-sitios" onChange={(event) => setWerks(event.target.value)} placeholder="Opcional" value={werks} /><datalist id="approval-sitios">{sitios.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</datalist></Field>
             <Field label="Comentario"><textarea onChange={(event) => setComment(event.target.value)} placeholder="Opcional" value={comment} /></Field>
           </div> : null}
@@ -425,10 +510,10 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
           : <div className="approval-actions">
               <div className="approval-actions-secondary">
                 {(puedeEditar || soloLectura) && puedeRechazar ? <button className="approval-text-button approval-danger-secondary" disabled={busy} onClick={() => setRejecting(true)} type="button">Rechazar</button> : null}
-                {puedeEditar && !ceco.trim() ? <span>Selecciona un CECO para continuar.</span> : null}
+                {puedeEditar && !puedeEnviarCeco ? <span>{modoMultiCeco ? "Indica el CECO de cada grupo para continuar." : "Selecciona un CECO para continuar."}</span> : null}
               </div>
               {puedeReabrir ? <button className="approval-text-button" disabled={busy} onClick={() => setReopening(true)} type="button">Reabrir</button> : null}
-              {puedeEditar ? <button className="approval-primary-button" disabled={busy || !ceco.trim()} onClick={() => submit("validar")} title={!ceco.trim() ? "Selecciona un CECO para continuar" : undefined} type="button">{busy ? "Guardando…" : selected.estado === "pendiente_aprobacion_gerencia" ? "Guardar corrección" : "Enviar a Gerencia"}</button> : null}
+              {puedeEditar ? <button className="approval-primary-button" disabled={busy || !puedeEnviarCeco} onClick={() => submit("validar")} title={!puedeEnviarCeco ? "Indica el CECO para continuar" : undefined} type="button">{busy ? "Guardando…" : selected.estado === "pendiente_aprobacion_gerencia" ? "Guardar corrección" : "Enviar a Gerencia"}</button> : null}
               {soloLectura ? <button className="approval-primary-button" disabled={busy} onClick={() => submit("aprobar")} type="button">{busy ? "Guardando…" : "Aprobar factura"}</button> : null}
             </div>}
         </> : <div className="approval-detail-placeholder"><span>Selecciona una factura para revisarla</span></div>}

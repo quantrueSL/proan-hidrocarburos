@@ -26,11 +26,10 @@ from typing import Any
 
 from google.cloud import bigquery
 
-from financialbi.aprobacion_engine import _CECO_CATALOGO
+from financialbi.aprobacion_engine import _APROBACION, _CECO_CATALOGO
 from financialbi.db import get_bq_client
 from financialbi.hidrocarburos_engine import _FOLIO, _SAP, _VENDORS
 
-_APROBACION = "`proan-quantrue.D60_REPORTING.HCARB_gold_aprobacion`"
 _ESTATUS_SAT = "`proan-quantrue.D60_REPORTING.HCARB_ESTATUS_SAT`"
 
 
@@ -92,8 +91,26 @@ def _construir_filtro(
         params.append(bigquery.ScalarQueryParameter("sitio", "STRING", sitio))
     if ceco == "__SIN_CECO__":
         clauses.append("COALESCE(a.ceco, s.ceco_sugerido) IS NULL")
+    elif ceco == "__VARIOS_CECO__":
+        # Mismo sentinela que usa _gasto_por_ceco para agrupar TODAS las
+        # combinaciones ambiguas en una sola barra -- aquí el drill-down: toda
+        # factura con varios CECO sugeridos que Compras todavía no ha resuelto
+        # por ticket (si ya lo confirmó, ceco_por_ticket no es NULL y esta
+        # factura ya no cuenta como "sin confirmar", aunque el legado `ceco`
+        # siga siendo una lista si los CECO confirmados son distintos entre sí).
+        clauses.append("a.ceco_por_ticket IS NULL AND STRPOS(COALESCE(a.ceco, s.ceco_sugerido), ',') > 0")
     elif ceco:
-        clauses.append("COALESCE(a.ceco, s.ceco_sugerido) = @ceco")
+        # Ademas del match exacto de siempre, si la factura tiene un reparto por
+        # ticket confirmado (ceco_por_ticket, ago-2026) el CECO buscado puede ser
+        # solo una parte del reparto -- sin este OR, filtrar el dashboard por un
+        # CECO real dejaria fuera facturas donde ese CECO es uno de varios.
+        clauses.append("""(
+          COALESCE(a.ceco, s.ceco_sugerido) = @ceco
+          OR EXISTS (
+            SELECT 1 FROM UNNEST(JSON_EXTRACT_ARRAY(a.ceco_por_ticket)) AS ticket_json
+            WHERE JSON_VALUE(ticket_json, '$.ceco') = @ceco
+          )
+        )""")
         params.append(bigquery.ScalarQueryParameter("ceco", "STRING", ceco))
     if estado_aprobacion:
         clauses.append("COALESCE(a.estado, 'pendiente_validacion_compras') = @estado_aprobacion")
@@ -192,11 +209,32 @@ def _gasto_por_ceco(where: str, params: list[bigquery.ScalarQueryParameter]) -> 
     s.ceco_sugerido, evidencia real de SAP/MSEG: ver HCARB_gold_validacion_sap.sql).
     Puede traer varios códigos separados por coma cuando el documento MSEG que
     casó reparte el gasto entre varios centros sin que ninguno domine (origen
-    'documento_multiple', ~24% de las facturas) -- se agrupan aparte en vez de
-    fragmentar el gráfico en una barra distinta por cada combinación."""
+    'documento_multiple', ~24% de las facturas) -- se agrupan TODOS bajo un
+    único `filtro` fijo (`__VARIOS_CECO__`, mismo patrón que `__SIN_CECO__`),
+    no por la combinación literal de códigos (bug corregido ago-2026: el
+    comentario ya decía "una barra, no una por combinación" pero el `filtro`
+    seguía siendo el string completo, así que cada combinación distinta salía
+    como su propia fila -- ~30 filas idénticamente tituladas 'Varios CECO (sin
+    confirmar)' en la tabla de prueba, todas menos una perdidas en el
+    frontend por colisión de `key`, ver dashboard-workspace.tsx).
+
+    ceco_por_ticket (ago-2026, ver aprobacion_engine.capturar_compras): cuando
+    Compras SÍ confirmó un reparto por ticket, ya no hace falta esconder la
+    factura en 'Varios CECO (sin confirmar)' -- se reparte importe_gas
+    proporcionalmente entre los CECO reales confirmados (una fila por ticket,
+    UNION ALL contra el resto de facturas que siguen con la lógica de siempre).
+    volumen_litros se reparte con la misma proporción (no hay cantidad física
+    por ticket en ceco_por_ticket, solo importe) -- aproximación razonable,
+    consistente con que el importe también se reparte así. COUNT(DISTINCT
+    x.uuid), no COUNT(*): una factura con 5 tickets del mismo CECO confirmado
+    cuenta como 1 factura para ese CECO, no como 5."""
     query = f"""
       SELECT
-        COALESCE(x.ceco, '__SIN_CECO__') AS filtro,
+        CASE
+          WHEN x.ceco IS NULL THEN '__SIN_CECO__'
+          WHEN STRPOS(x.ceco, ',') > 0 THEN '__VARIOS_CECO__'
+          ELSE x.ceco
+        END AS filtro,
         CASE
           WHEN x.ceco IS NULL THEN 'Sin CECO'
           WHEN STRPOS(x.ceco, ',') > 0 THEN 'Varios CECO (sin confirmar)'
@@ -204,9 +242,24 @@ def _gasto_por_ceco(where: str, params: list[bigquery.ScalarQueryParameter]) -> 
         END AS grupo,
         SUM(x.importe_gas) AS importe_gas,
         SUM(x.volumen_litros) AS volumen_litros,
-        COUNT(*) AS n_facturas
+        COUNT(DISTINCT x.uuid) AS n_facturas
       FROM (
         SELECT
+          f.uuid,
+          CAST(JSON_VALUE(ticket_json, '$.importe_ticket') AS FLOAT64) AS importe_gas,
+          {_volumen_litros()} * SAFE_DIVIDE(CAST(JSON_VALUE(ticket_json, '$.importe_ticket') AS FLOAT64), f.importe_gas) AS volumen_litros,
+          JSON_VALUE(ticket_json, '$.ceco') AS ceco
+        FROM {_FOLIO} f
+        JOIN {_APROBACION} a ON f.uuid = a.uuid AND a.ceco_por_ticket IS NOT NULL
+        LEFT JOIN {_SAP} s ON f.uuid = s.uuid
+        LEFT JOIN {_ESTATUS_SAT} e ON f.uuid = e.uuid,
+          UNNEST(JSON_EXTRACT_ARRAY(a.ceco_por_ticket)) AS ticket_json
+        WHERE {where}
+
+        UNION ALL
+
+        SELECT
+          f.uuid,
           f.importe_gas,
           {_volumen_litros()} AS volumen_litros,
           COALESCE(a.ceco, s.ceco_sugerido) AS ceco
@@ -214,7 +267,7 @@ def _gasto_por_ceco(where: str, params: list[bigquery.ScalarQueryParameter]) -> 
         LEFT JOIN {_APROBACION} a ON f.uuid = a.uuid
         LEFT JOIN {_SAP} s ON f.uuid = s.uuid
         LEFT JOIN {_ESTATUS_SAT} e ON f.uuid = e.uuid
-        WHERE {where}
+        WHERE {where} AND a.ceco_por_ticket IS NULL
       ) x
       LEFT JOIN {_CECO_CATALOGO} cat ON cat.KOSTL = TRIM(x.ceco) AND cat.DATBI = '99991231' AND cat.KOKRS = 'PROA'
       GROUP BY filtro, grupo

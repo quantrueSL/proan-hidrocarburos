@@ -58,6 +58,10 @@ export type AprobacionInvoice = {
   tickets_mseg: AprobacionMsegTicket[] | null;
   mseg_n_tickets: number | null;
   mseg_n_tickets_match: number | null;
+  // CECO confirmado por ticket/línea (ago-2026) -- cuando la factura reparte gasto entre
+  // varios CECO reales, Compras confirma uno por ticket en vez de un solo `ceco` para toda
+  // la factura. NULL en el caso común (1 solo CECO real, basta `ceco`).
+  ceco_por_ticket: AprobacionCecoPorTicket[] | null;
   // Sugerencia de CECO (por ticket si TODOS casaron exacto, si no patrón de proveedor de
   // un solo sitio, si no los KOSTL del documento MSEG que casó -- uno o varios separados
   // por coma). Solo prellena, nunca bloquea.
@@ -80,6 +84,16 @@ export type AprobacionMsegTicket = {
   cantidad_zeile: number | null;
   importe_zeile: number | null;
   match_exacto: boolean;
+};
+
+// Un CECO confirmado por Compras para un ticket de entrega concreto (ver
+// AprobacionInvoice.ceco_por_ticket). importe_ticket viaja aquí (no solo en
+// tickets_mseg) para que el reparto del dashboard no dependa de volver a casar
+// contra la evidencia MSEG -- es el valor confirmado en el momento de la captura.
+export type AprobacionCecoPorTicket = {
+  ticket: string | null;
+  ceco: string;
+  importe_ticket: number | null;
 };
 
 // Paginada igual que HydrocarburosSearchResponse (M1): 50 por página en vez de

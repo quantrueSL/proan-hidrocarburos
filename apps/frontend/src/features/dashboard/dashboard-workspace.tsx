@@ -20,6 +20,11 @@ type Props = {
 
 type InteractiveFilterKey = "periodo" | "proveedor_id" | "sitio" | "ceco" | "estado_aprobacion" | "estatus_sat" | "confianza_mseg" | "estado_sap";
 
+// Debe coincidir exactamente con la etiqueta que arma dashboard_engine.py
+// (_gasto_por_ceco) para las facturas con varios CECO reales sin confirmar
+// por ticket todavía -- marca esa barra con tono de aviso (ver charts.tsx).
+const VARIOS_CECO_LABEL = "Varios CECO (sin confirmar)";
+
 const APPROVAL_LABEL: Record<string, string> = {
   pendiente_validacion_compras: "Pendiente Compras",
   pendiente_aprobacion_gerencia: "Pendiente Gerencia",
@@ -77,7 +82,7 @@ export function DashboardWorkspace({ initialData, initialError, proveedores, ult
     ...(filters.sitio ? [{ key: "sitio" as const, label: `Centro: ${selectionLabels.sitio || filters.sitio}` }] : []),
     ...(filters.ceco ? [{
       key: "ceco" as const,
-      label: `CECO: ${selectionLabels.ceco || (filters.ceco === "__SIN_CECO__" ? "Sin CECO" : filters.ceco)}`
+      label: `CECO: ${selectionLabels.ceco || (filters.ceco === "__SIN_CECO__" ? "Sin CECO" : filters.ceco === "__VARIOS_CECO__" ? VARIOS_CECO_LABEL : filters.ceco)}`
     }] : []),
     ...(filters.estado_aprobacion ? [{
       key: "estado_aprobacion" as const,
@@ -338,6 +343,7 @@ export function DashboardWorkspace({ initialData, initialError, proveedores, ult
           metric={metric}
           onSelect={(item) => toggleChartFilter("ceco", item)}
           titulo={`${metricLabel} por CECO`}
+          warnLabel={VARIOS_CECO_LABEL}
         />
       </div>
     </section>

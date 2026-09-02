@@ -91,7 +91,7 @@ function formatMetricValue(item: DashboardGastoItem, metric: DashboardMetric, co
 // Barras horizontales rankeadas -- una sola serie (magnitud), un solo tono
 // secuencial (nunca colorea por categoría: el orden ya lo dice todo).
 export function RankedBarChart({
-  items, titulo, metric, maxRows = 5, activeFilter, onSelect
+  items, titulo, metric, maxRows = 5, activeFilter, onSelect, warnLabel
 }: {
   items: DashboardGastoItem[];
   titulo: string;
@@ -99,6 +99,12 @@ export function RankedBarChart({
   maxRows?: number;
   activeFilter?: string | null;
   onSelect?: (item: DashboardGastoItem) => void;
+  // Marca en tono de aviso las filas cuyo `grupo` coincida (ej. "Varios CECO
+  // (sin confirmar)") -- excepción deliberada a "nunca colorea por categoría"
+  // de más arriba: esto no es una categoría más del ranking, es un estado
+  // ambiguo/accionable (mismo criterio de colores de estado reservados que
+  // el donut de SAT).
+  warnLabel?: string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const [showAll, setShowAll] = useState(false);
@@ -115,11 +121,12 @@ export function RankedBarChart({
           {visibles.map((item, i) => {
             const v = valueOf(item, metric);
             const pct = Math.max(2, (v / max) * 100);
+            const isWarning = Boolean(warnLabel) && item.grupo === warnLabel;
             return (
               <li
                 aria-pressed={activeFilter === item.filtro}
-                className={`dashboard-bar-row${hover === i ? " is-hover" : ""}${activeFilter === item.filtro ? " is-selected" : ""}`}
-                key={item.grupo}
+                className={`dashboard-bar-row${hover === i ? " is-hover" : ""}${activeFilter === item.filtro ? " is-selected" : ""}${isWarning ? " is-warning" : ""}`}
+                key={item.filtro}
                 onBlur={() => setHover(null)}
                 onClick={() => onSelect?.(item)}
                 onFocus={() => setHover(i)}

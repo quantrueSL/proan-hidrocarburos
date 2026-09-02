@@ -34,7 +34,15 @@ CREATE TABLE IF NOT EXISTS `proan-quantrue.D60_REPORTING.HCARB_gold_aprobacion` 
   -- por eso van separadas del CREATE TABLE original en el código fuente.
   reabierta_por STRING,
   fecha_reapertura TIMESTAMP,
-  motivo_reapertura STRING
+  motivo_reapertura STRING,
+  -- CECO por ticket/línea (ago-2026): JSON-encoded array de {ticket, ceco,
+  -- importe_ticket}, uno por cada ticket de entrega (ver
+  -- HCARB_GOLD_VALIDACION_SAP.tickets_mseg) cuando la factura reparte gasto
+  -- entre varios CECO reales -- NULL para el caso común (1 solo CECO), donde
+  -- basta el campo `ceco` de siempre. Añadida después con
+  -- ALTER TABLE ... ADD COLUMN IF NOT EXISTS, por eso va separada del CREATE
+  -- TABLE original en el código fuente (igual que las de reapertura).
+  ceco_por_ticket STRING
 );
 
 -- Quién escribe cada transición (todo en aprobacion_engine.py):
@@ -44,8 +52,12 @@ CREATE TABLE IF NOT EXISTS `proan-quantrue.D60_REPORTING.HCARB_gold_aprobacion` 
 --                        se llama en cada carga de la cola de Compras, idempotente.
 --   capturar_compras()  pendiente_validacion_compras -> pendiente_aprobacion_gerencia
 --                        Compras captura CECO (siempre manual) y opcionalmente el
---                        sitio (solo si M2 no lo dedujo). También acepta como
---                        origen pendiente_aprobacion_gerencia (reversibilidad:
+--                        sitio (solo si M2 no lo dedujo). Si la factura reparte
+--                        gasto entre varios CECO reales (evidencia por ticket),
+--                        captura también ceco_por_ticket -- ceco queda derivado
+--                        (único valor si coincide, lista separada por coma si no)
+--                        para las vistas que solo leen ese campo. También acepta
+--                        como origen pendiente_aprobacion_gerencia (reversibilidad:
 --                        permite corregir CECO/sitio mientras Gerencia no haya
 --                        decidido, sin pasar por reabrir()).
 --   aprobar_gerencia()  pendiente_aprobacion_gerencia -> aprobada
@@ -53,9 +65,10 @@ CREATE TABLE IF NOT EXISTS `proan-quantrue.D60_REPORTING.HCARB_gold_aprobacion` 
 --                        pendiente_aprobacion_gerencia -> rechazada  (rol=gerencia)
 --   reabrir()           pendiente_aprobacion_gerencia | aprobada | rechazada
 --                        -> pendiente_validacion_compras
---                        Borra CECO/sitio/comentarios/quién decidió y deja
---                        registro de quién reabrió y por qué. Sin control de rol
---                        (D27 pendiente): cualquiera puede reabrir cualquier factura.
+--                        Borra CECO/ceco_por_ticket/sitio/comentarios/quién decidió
+--                        y deja registro de quién reabrió y por qué. Sin control de
+--                        rol (D27 pendiente): cualquiera puede reabrir cualquier
+--                        factura.
 --
 -- Sin auth real (D27): "usuario" es texto libre que captura el propio
 -- frontend, no viene de un login con roles verificados.

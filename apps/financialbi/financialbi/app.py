@@ -99,6 +99,15 @@ class DashboardFiltros(BaseModel):
     detalle_sat: bool = False
 
 
+class CecoPorTicketItem(BaseModel):
+    # Un CECO confirmado por ticket de entrega (ago-2026, ver
+    # HCARB_GOLD_VALIDACION_SAP.tickets_mseg) -- solo se manda cuando la
+    # factura reparte gasto entre varios CECO reales.
+    ticket: str | None = None
+    ceco: str = Field(min_length=1)
+    importe_ticket: float | None = None
+
+
 class CapturarCompraBody(BaseModel):
     # Identidad de usuario (D27): texto libre por ahora -- no hay login con
     # roles reales todavía.
@@ -106,6 +115,10 @@ class CapturarCompraBody(BaseModel):
     ceco: str = Field(min_length=1)
     werks_manual: str | None = None
     comentario: str | None = None
+    # Cuando la factura tiene varios CECO reales confirmados por ticket
+    # (ver aprobacion_engine.capturar_compras) -- opcional, NULL en el caso
+    # común de 1 solo CECO.
+    ceco_por_ticket: list[CecoPorTicketItem] | None = None
 
 
 class AprobarBody(BaseModel):

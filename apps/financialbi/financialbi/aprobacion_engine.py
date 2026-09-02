@@ -14,6 +14,8 @@ técnica explícita.
 
 from __future__ import annotations
 
+import json
+import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from typing import Any, Literal
@@ -23,7 +25,11 @@ from google.cloud import bigquery
 from financialbi.db import get_bq_client
 from financialbi.hidrocarburos_engine import _FOLIO, _SAP, _VENDORS
 
-_APROBACION_TABLE = "proan-quantrue.D60_REPORTING.HCARB_gold_aprobacion"
+# HCARB_APROBACION_TABLE (mismo patron que HCARB_FOLIO_TABLE/HCARB_SAP_TABLE en
+# hidrocarburos_engine.py): permite apuntar a una tabla alterna de prueba (p.ej.
+# HCARB_gold_aprobacion_fer) sin escribir en la tabla real de produccion mientras
+# se prueba en local. Sin definir, usa la tabla real de siempre.
+_APROBACION_TABLE = os.getenv("HCARB_APROBACION_TABLE", "proan-quantrue.D60_REPORTING.HCARB_gold_aprobacion")
 _APROBACION = f"`{_APROBACION_TABLE}`"
 _CECO_CATALOGO = "`proan-quantrue.D00_SANDBOX.proan_CSKT_20260714`"
 _CENTROS = "`proan-quantrue.D20_DIMENSION.dm_centros`"
@@ -58,7 +64,15 @@ CREATE TABLE IF NOT EXISTS {_APROBACION} (
   -- que hace falta ahora mismo).
   reabierta_por STRING,
   fecha_reapertura TIMESTAMP,
-  motivo_reapertura STRING
+  motivo_reapertura STRING,
+  -- CECO por ticket/línea (ago-2026): JSON-encoded array con ticket, ceco e
+  -- importe_ticket por cada ticket de entrega (ver
+  -- HCARB_GOLD_VALIDACION_SAP.tickets_mseg) cuando la factura reparte gasto
+  -- entre varios CECO reales -- NULL para el caso común (1 solo CECO), donde
+  -- basta el campo `ceco` de siempre. Texto plano (no ARRAY<STRUCT> nativo)
+  -- para no necesitar StructQueryParameter al escribir; se lee con
+  -- JSON_EXTRACT_ARRAY/JSON_VALUE en SQL y json.loads() en Python.
+  ceco_por_ticket STRING
 )
 """
 
@@ -69,6 +83,11 @@ ALTER TABLE {_APROBACION}
   ADD COLUMN IF NOT EXISTS motivo_reapertura STRING
 """
 
+_ALTER_ADD_CECO_POR_TICKET = f"""
+ALTER TABLE {_APROBACION}
+  ADD COLUMN IF NOT EXISTS ceco_por_ticket STRING
+"""
+
 _ESTADO_ORIGEN = {
     "compras": "pendiente_validacion_compras",
     "gerencia": "pendiente_aprobacion_gerencia",
@@ -76,11 +95,12 @@ _ESTADO_ORIGEN = {
 
 
 def ensure_schema() -> None:
-    """Crea HCARB_gold_aprobacion si no existe, y añade las columnas de
-    reapertura si faltan (tabla creada antes de que existieran). Idempotente."""
+    """Crea HCARB_gold_aprobacion si no existe, y añade las columnas nuevas
+    si faltan (tabla creada antes de que existieran). Idempotente."""
     client = get_bq_client()
     client.query(_SCHEMA_DDL).result()
     client.query(_ALTER_ADD_REAPERTURA).result()
+    client.query(_ALTER_ADD_CECO_POR_TICKET).result()
 
 
 def _client() -> bigquery.Client:
@@ -95,14 +115,25 @@ def _rows(query: str, params: list[bigquery.ScalarQueryParameter] | None = None)
 
 def sync_pendientes() -> int:
     """Da de alta en HCARB_gold_aprobacion las facturas clasificadas (M1) que
-    todavía no tienen fila -- quedan en pendiente_validacion_compras. Idempotente,
-    se puede llamar en cada request de la cola de Compras sin duplicar filas."""
+    todavía no tienen fila -- quedan en pendiente_validacion_compras. Se llama
+    en cada carga de la cola de Compras.
+
+    MERGE, no INSERT...SELECT anti-join (ago-2026, fix de duplicados): el
+    anti-join original hacía el SELECT ("¿ya existe?") y el INSERT como dos
+    pasos separados -- si dos peticiones concurrentes llegaban antes de que la
+    primera hiciera commit (más probable justo cuando la tabla está vacía o
+    recién creada: varias pestañas/usuarios cargando Compras a la vez, medido
+    reproduciendo el caso -- 100% de las filas duplicadas 3 veces), ambas veían
+    "sin fila todavía" e insertaban la MISMA factura más de una vez (BigQuery
+    no tiene restricciones UNIQUE que lo impidan). MERGE decide e inserta en un
+    solo statement atómico, y BigQuery serializa los MERGE concurrentes sobre
+    la misma tabla (uno de los dos falla y se puede reintentar) en vez de
+    dejarlos pasar a ambos sin más."""
     query = f"""
-      INSERT INTO {_APROBACION} (uuid, estado)
-      SELECT f.uuid, 'pendiente_validacion_compras'
-      FROM {_FOLIO} f
-      LEFT JOIN {_APROBACION} a ON f.uuid = a.uuid
-      WHERE a.uuid IS NULL
+      MERGE {_APROBACION} a
+      USING {_FOLIO} f ON f.uuid = a.uuid
+      WHEN NOT MATCHED THEN
+        INSERT (uuid, estado) VALUES (f.uuid, 'pendiente_validacion_compras')
     """
     job = _client().query(query)
     job.result()
@@ -110,7 +141,7 @@ def sync_pendientes() -> int:
 
 
 _SELECT_COLA = """
-        a.uuid, a.estado, a.ceco, a.werks_manual,
+        a.uuid, a.estado, a.ceco, a.ceco_por_ticket, a.werks_manual,
         a.usuario_compras, a.fecha_validacion_compras, a.comentario_compras,
         a.usuario_gerencia, a.fecha_aprobacion_gerencia, a.comentario_gerencia,
         a.rechazada_por_rol, a.motivo_rechazo,
@@ -195,6 +226,17 @@ def _filtros_cola(
     return " AND ".join(clauses), params
 
 
+def _parse_ceco_por_ticket(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """a.ceco_por_ticket es STRING con JSON dentro (ver _SCHEMA_DDL) -- lo
+    decodificamos aquí para que el frontend reciba un array real, no un
+    string, igual que tickets_mseg (que sí es un RECORD nativo de BigQuery
+    y no necesita este paso)."""
+    for row in rows:
+        raw = row.get("ceco_por_ticket")
+        row["ceco_por_ticket"] = json.loads(raw) if raw else None
+    return rows
+
+
 def _cola_from(extra_where: str) -> str:
     return f"""
       FROM {_APROBACION} a
@@ -232,7 +274,7 @@ def _paginar_cola(
         resumen_future = executor.submit(_rows, resumen_query, params)
         rows_future = executor.submit(_rows, query, query_params)
         resumen_rows = resumen_future.result()
-        rows = rows_future.result()
+        rows = _parse_ceco_por_ticket(rows_future.result())
     resumen = resumen_rows[0] if resumen_rows else {"total": 0, "importe_gas_total": 0, "validadas_sap": 0, "con_mseg": 0}
     return {
         "total": resumen["total"],
@@ -344,25 +386,50 @@ def _estado_actual(uuid: str) -> str | None:
 
 
 def capturar_compras(
-    *, uuid: str, ceco: str, usuario: str, werks_manual: str | None = None, comentario: str | None = None
+    *,
+    uuid: str,
+    ceco: str,
+    usuario: str,
+    werks_manual: str | None = None,
+    comentario: str | None = None,
+    ceco_por_ticket: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Compras captura CECO (siempre) y opcionalmente el sitio manual (solo si
     M2 no lo dedujo) -- pasa la factura a pendiente_aprobacion_gerencia.
 
+    ceco_por_ticket (ago-2026): cuando la factura reparte gasto entre varios
+    CECO reales (evidencia por ticket, ver HCARB_GOLD_VALIDACION_SAP.tickets_mseg
+    -- uno o varios tickets de entrega, cada uno con su propio CECO exacto),
+    Compras confirma un CECO por ticket en vez de uno solo para toda la
+    factura. El campo `ceco` legado se deriva aquí (no del valor recibido)
+    a partir de los CECO distintos confirmados -- único valor si coinciden,
+    lista separada por coma si no, mismo formato que ya usa ceco_sugerido --
+    así las vistas que solo leen `ceco` (Gerencia solo-lectura, Historial,
+    filtros, catálogo) siguen funcionando sin cambios. Si no se recibe (caso
+    común, 1 solo CECO real), `ceco` se guarda tal cual y ceco_por_ticket
+    queda NULL -- comportamiento idéntico al de antes de este campo.
+
     Reversibilidad: el WHERE acepta también pendiente_aprobacion_gerencia como
     origen -- Compras puede corregir un error de captura (CECO/sitio) mientras
     Gerencia no haya decidido todavía, sin necesitar reabrir nada."""
+    ceco_final = ceco
+    ceco_por_ticket_json = None
+    if ceco_por_ticket:
+        distintos = sorted({item["ceco"].strip() for item in ceco_por_ticket if item.get("ceco", "").strip()})
+        ceco_final = distintos[0] if len(distintos) == 1 else ", ".join(distintos)
+        ceco_por_ticket_json = json.dumps(ceco_por_ticket)
     query = f"""
       UPDATE {_APROBACION}
-      SET ceco = @ceco, werks_manual = @werks_manual, usuario_compras = @usuario,
-          fecha_validacion_compras = CURRENT_TIMESTAMP(), comentario_compras = @comentario,
-          estado = 'pendiente_aprobacion_gerencia'
+      SET ceco = @ceco, ceco_por_ticket = @ceco_por_ticket, werks_manual = @werks_manual,
+          usuario_compras = @usuario, fecha_validacion_compras = CURRENT_TIMESTAMP(),
+          comentario_compras = @comentario, estado = 'pendiente_aprobacion_gerencia'
       WHERE uuid = @uuid
         AND estado IN ('pendiente_validacion_compras', 'pendiente_aprobacion_gerencia')
     """
     params = [
         bigquery.ScalarQueryParameter("uuid", "STRING", uuid),
-        bigquery.ScalarQueryParameter("ceco", "STRING", ceco),
+        bigquery.ScalarQueryParameter("ceco", "STRING", ceco_final),
+        bigquery.ScalarQueryParameter("ceco_por_ticket", "STRING", ceco_por_ticket_json),
         bigquery.ScalarQueryParameter("werks_manual", "STRING", werks_manual),
         bigquery.ScalarQueryParameter("usuario", "STRING", usuario),
         bigquery.ScalarQueryParameter("comentario", "STRING", comentario),
@@ -419,8 +486,9 @@ def rechazar(*, uuid: str, rol: Rol, usuario: str, motivo: str) -> dict[str, Any
 def reabrir(*, uuid: str, usuario: str, motivo: str) -> dict[str, Any]:
     """Deshace cualquier avance sobre una factura (ya validada por Compras,
     aprobada, o rechazada) y la devuelve a pendiente_validacion_compras --
-    borra los datos anteriores (CECO, sitio, comentarios, quién decidió) y
-    deja constancia de quién reabrió y por qué. Incluye pendiente_aprobacion_gerencia
+    borra los datos anteriores (CECO, CECO por ticket, sitio, comentarios,
+    quién decidió) y deja constancia de quién reabrió y por qué. Incluye
+    pendiente_aprobacion_gerencia
     a propósito: sirve también para "me equivoqué de CECO, quiero borrar todo
     y empezar de cero" sin necesitar que Gerencia apruebe o rechace antes.
     No hay control de rol (D27): cualquiera puede reabrir cualquier factura,
@@ -428,7 +496,7 @@ def reabrir(*, uuid: str, usuario: str, motivo: str) -> dict[str, Any]:
     query = f"""
       UPDATE {_APROBACION}
       SET estado = 'pendiente_validacion_compras',
-          ceco = NULL, werks_manual = NULL,
+          ceco = NULL, ceco_por_ticket = NULL, werks_manual = NULL,
           usuario_compras = NULL, fecha_validacion_compras = NULL, comentario_compras = NULL,
           usuario_gerencia = NULL, fecha_aprobacion_gerencia = NULL, comentario_gerencia = NULL,
           rechazada_por_rol = NULL, motivo_rechazo = NULL,
