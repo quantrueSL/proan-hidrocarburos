@@ -73,7 +73,7 @@ def buscar_facturas(
     fecha_hasta: str | None,
 ) -> list[dict[str, Any]]:
     """Búsqueda por el identificador "humano" (RFC emisor + Serie + Folio),
-    con rango de fecha opcional -- ver Datos/naturaleza-de-los-datos.md sobre
+    con rango de fecha opcional -- ver docs/data/naturaleza-de-los-datos.md sobre
     por qué el folio solo no es único (se repite entre ejercicios fiscales).
     Puede devolver varias coincidencias; el llamador decide qué hacer con eso.
     """

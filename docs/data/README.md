@@ -22,7 +22,7 @@ decisión concreta.
 
 Para el estado actual de las tablas `HCARB_*`, qué hace cada query y el
 historial de bugs corregidos al ejecutarlas contra BigQuery real, ver
-**[`ConsultasBigQuery/README.md`](../ConsultasBigQuery/README.md)** — esa es la
+**[`ConsultasBigQuery/README.md`](../../ConsultasBigQuery/README.md)** — esa es la
 fuente que se mantiene viva y se re-ejecuta.
 
 ## Acceso a BigQuery

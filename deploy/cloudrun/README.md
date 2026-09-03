@@ -63,7 +63,7 @@ bash deploy/cloudrun/deploy.sh
 ```
 
 Para los usuarios normales de la herramienta no hay que desplegar nada: se
-gestionan en la lista de Firestore desde el portal de listas (ver `LOGIN.md`).
+gestionan en la lista de Firestore desde el portal de listas (ver `docs/login/LOGIN.md`).
 
 ## Decisiones y detalles
 

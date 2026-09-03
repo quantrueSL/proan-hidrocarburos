@@ -8,7 +8,7 @@ qué las facturas de gas y los registros de SAP no pueden casar al 100%, y qué
 significa cada nivel de coincidencia que ves en la herramienta.
 
 Para el detalle de qué hace cada query y el historial de bugs encontrados al
-ejecutarlas, ver [`ConsultasBigQuery/README.md`](../ConsultasBigQuery/README.md)
+ejecutarlas, ver [`ConsultasBigQuery/README.md`](../../ConsultasBigQuery/README.md)
 — esa es la fuente que se mantiene viva. Este documento explica el **porqué**
 estructural; el README explica el **qué** y el **cuándo**.
 

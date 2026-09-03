@@ -4,7 +4,7 @@ SQL de producto de proan-Hidrocarburos: construye las tablas `HCARB_*` que
 lee la herramienta — esto se mantiene y se re-ejecuta. Por qué el cruce
 CFDI↔SAP nunca es exacto (grano distinto entre sistemas, tolerancias,
 CECO/sitio como evidencia y no como dato exacto) en
-[`Datos/naturaleza-de-los-datos.md`](../Datos/naturaleza-de-los-datos.md).
+[`docs/data/naturaleza-de-los-datos.md`](../docs/data/naturaleza-de-los-datos.md).
 
 **Estado actual: ejecutadas y validadas contra BigQuery (jul-2026)**. Al
 ejecutar aparecieron 6 bugs reales que ninguna revisión estática detectó
@@ -69,7 +69,7 @@ reabre las colisiones que la ventana corta (solo +35), así que no se toca. El b
 completo de `proan-quantrue` que lo motivó — y por qué el **CECO** sigue sin poder
 derivarse de forma exacta (ACDOCA acotado a la sociedad `ETC`, no las del gas;
 `0FI_GL_14` congelado en 2024; sin `EKKN`) está en
-[`Datos/naturaleza-de-los-datos.md`](../Datos/naturaleza-de-los-datos.md).
+[`docs/data/naturaleza-de-los-datos.md`](../docs/data/naturaleza-de-los-datos.md).
 
 **Dirección de Consumo vía `T001W` (Fase-1-bis, jul-2026):** la Propuesta pide mostrar
 la "Dirección de Consumo" (punto físico de entrega); Fase 1 la dio por inexistente, pero

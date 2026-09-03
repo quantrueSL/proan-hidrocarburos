@@ -34,7 +34,7 @@ sobre Firebase Authentication. El rol (`gerencia` o `generico`) vive en la sesi�
 y, en el caso de Google, se resuelve contra una lista en Firestore.
 
 El detalle completo —decisiones, matriz de permisos, cómo dar acceso a alguien y
-las trampas a recordar— está en `LOGIN.md`, en la raíz del repo.
+las trampas a recordar— está en `docs/login/LOGIN.md`.
 
 Lo esencial para trabajar aquí:
 

@@ -13,7 +13,7 @@ deploy/cloudrun    despliegue de producción (Cloud Run)
 deploy/            docker-compose.dev.yml + nginx (solo desarrollo)
 config/            financialbi.env + bq_credentials.json (BigQuery)
 pyproject.toml     workspace uv (miembro: apps/financialbi) + uv.lock
-LOGIN.md           decisiones y estado del login y los roles
+docs/login/LOGIN.md   decisiones y estado del login y los roles
 ```
 
 - **Backend**: endpoints `/v1/financialbi/hidrocarburos/{catalog,summary,invoices/search,invoices/{uuid}}`.
@@ -23,7 +23,7 @@ LOGIN.md           decisiones y estado del login y los roles
   **Google** (Firebase Authentication) y **usuario/contraseña** contra
   `.htpasswd` (bcrypt) —, ambas verificadas dentro del propio Next, sin
   auth-service ni gateway. Dos roles: `gerencia` y `generico`. Ver
-  [`LOGIN.md`](./LOGIN.md). **nginx** solo interviene en desarrollo, como
+  [`docs/login/LOGIN.md`](./docs/login/LOGIN.md). **nginx** solo interviene en desarrollo, como
   reverse-proxy; en producción Cloud Run termina el TLS y enruta.
 
 ## Qué hace la herramienta
@@ -93,7 +93,7 @@ El SQL de producto que construye las tablas `HCARB_*` está en git, en
 bugs corregidos al ejecutarlo contra BigQuery real. Por qué el cruce
 CFDI↔SAP nunca es exacto al 100% (grano distinto entre sistemas, CECO/sitio
 como evidencia y no como dato exacto) en
-[`Datos/naturaleza-de-los-datos.md`](./Datos/naturaleza-de-los-datos.md).
+[`docs/data/naturaleza-de-los-datos.md`](./docs/data/naturaleza-de-los-datos.md).
 
 ## Levantar en local (desarrollo)
 
@@ -133,7 +133,7 @@ Hay dos poblaciones distintas y se gestionan en sitios distintos:
   `gerencia`. En producción ese fichero llega desde Secret Manager, ver
   [`deploy/cloudrun/README.md`](./deploy/cloudrun/README.md).
 
-Detalle de las dos vías, los roles y cómo dar acceso: [`LOGIN.md`](./LOGIN.md).
+Detalle de las dos vías, los roles y cómo dar acceso: [`docs/login/LOGIN.md`](./docs/login/LOGIN.md).
 
 ### .htpasswd en desarrollo
 

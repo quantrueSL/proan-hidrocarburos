@@ -6,7 +6,7 @@ Se revisará antes del despliegue definitivo.
 > **Estado a jul-2026.** Partes de este checklist ya están resueltas o se
 > decidieron de otra forma. Donde haya discrepancia, manda lo que digan:
 >
-> - `LOGIN.md` (raíz) — autenticación, roles y autorización: el apartado 4 de
+> - `docs/login/LOGIN.md` — autenticación, roles y autorización: el apartado 4 de
 >   aquí está **hecho**, salvo el rate limiting.
 > - `deploy/cloudrun/README.md` — despliegue real. En particular, el apartado 1
 >   de aquí queda **superado**: no son dos servicios separados, es **un servicio
