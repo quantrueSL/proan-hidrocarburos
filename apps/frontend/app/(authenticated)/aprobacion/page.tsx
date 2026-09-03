@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth/session";
 import { canAccessAprobacion } from "@/lib/auth/roles";
-import { getAprobacionGerencia, getHydrocarburosCatalog } from "@/lib/gateway";
+import { getAprobacionCatalogNucleo, getAprobacionGerencia, getHydrocarburosCatalog } from "@/lib/gateway";
 import { getDefaultAuthenticatedRoute } from "../../../client.config";
 import { AprobacionWorkspace } from "@/features/aprobacion/aprobacion-workspace";
-import { EMPTY_APROBACION_QUEUE, type AprobacionQueue } from "@/types/aprobacion";
+import { EMPTY_APROBACION_QUEUE, type AprobacionCatalog, type AprobacionQueue } from "@/types/aprobacion";
 import type { HydrocarburosCatalog } from "@/types/hidrocarburos";
 
 // M3 · Aprobación Gerencial (Módulo 3 de la propuesta): one-tap sobre las
@@ -22,15 +22,23 @@ export default async function AprobacionPage() {
   }
 
   let gerencia: AprobacionQueue = EMPTY_APROBACION_QUEUE;
+  let nucleos: AprobacionCatalog = { rows: [] };
   let filtrosCatalog: HydrocarburosCatalog = { fecha_minima: null, fecha_maxima: null, proveedores: [], sitios: [], claves_sat: [] };
   let error: string | null = null;
 
   try {
-    [gerencia, filtrosCatalog] = await Promise.all([getAprobacionGerencia(session), getHydrocarburosCatalog(session)]);
+    // A diferencia de CECO/sitio (solo se usan en el formulario de captura de
+    // Compras), Núcleo es de solo lectura -- Gerencia sí lo necesita para ver
+    // a qué núcleo pertenece cada factura que va a aprobar/rechazar.
+    [gerencia, nucleos, filtrosCatalog] = await Promise.all([
+      getAprobacionGerencia(session),
+      getAprobacionCatalogNucleo(session),
+      getHydrocarburosCatalog(session)
+    ]);
   } catch (cause) {
     error = cause instanceof Error ? cause.message : "No se pudo preparar la bandeja de aprobación.";
   }
 
   // Aquí solo llega gerencia (el redirect de arriba), así que puede rechazar.
-  return <AprobacionWorkspace cecos={[]} initialError={error} initialCompras={EMPTY_APROBACION_QUEUE} initialGerencia={gerencia} initialHistorial={EMPTY_APROBACION_QUEUE} sitios={[]} proveedores={filtrosCatalog.proveedores} ultimaActualizacion={filtrosCatalog.ultima_actualizacion} puedeRechazar roles={["gerencia"]} />;
+  return <AprobacionWorkspace cecos={[]} initialError={error} initialCompras={EMPTY_APROBACION_QUEUE} initialGerencia={gerencia} initialHistorial={EMPTY_APROBACION_QUEUE} nucleos={nucleos.rows} sitios={[]} proveedores={filtrosCatalog.proveedores} ultimaActualizacion={filtrosCatalog.ultima_actualizacion} puedeRechazar roles={["gerencia"]} />;
 }

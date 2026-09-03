@@ -11,6 +11,9 @@ type Props = {
   initialError: string | null;
   initialGerencia: AprobacionQueue;
   initialHistorial: AprobacionQueue;
+  // Solo lectura (sin <datalist>, a diferencia de cecos/sitios): a qué núcleo
+  // pertenece cada CECO ya asignado/sugerido -- ver aprobacion_engine.catalogo_nucleo().
+  nucleos: AprobacionOption[];
   sitios: AprobacionOption[];
   proveedores: AprobacionOption[];
   ultimaActualizacion?: string | null;
@@ -163,7 +166,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <label className="approval-field"><span>{label}</span>{children}</label>;
 }
 
-export function AprobacionWorkspace({ cecos, initialCompras, initialError, initialGerencia, initialHistorial, sitios, proveedores, ultimaActualizacion, puedeRechazar, roles = ["compras", "gerencia", "historial"] }: Props) {
+export function AprobacionWorkspace({ cecos, initialCompras, initialError, initialGerencia, initialHistorial, nucleos, sitios, proveedores, ultimaActualizacion, puedeRechazar, roles = ["compras", "gerencia", "historial"] }: Props) {
   const [role, setRole] = useState<Role>(roles[0]);
   const [compras, setCompras] = useState(initialCompras);
   const [gerencia, setGerencia] = useState(initialGerencia);
@@ -182,6 +185,7 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
   const [filters, setFilters] = useState<AprobacionFiltros>({});
   const [filtersOpen, setFiltersOpen] = useState(false);
   const cecoNombrePorId = useMemo(() => new Map(cecos.map((item) => [item.id, item.nombre])), [cecos]);
+  const nucleoPorCeco = useMemo(() => new Map(nucleos.map((item) => [item.id, item.nombre])), [nucleos]);
 
   useEffect(() => {
     if (!selected) return;
@@ -194,6 +198,12 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
   function cecoDD(value: string | null) {
     const info = cecoLabel(value, cecoNombrePorId);
     return info ? <span title={info.completo}>{info.corto}</span> : "—";
+  }
+  // El CeCo confirmado manda; si Compras todavía no capturó, se intenta con el
+  // sugerido (mismo criterio que cecoInfo en la tabla) -- puede no resolver
+  // ningún núcleo (fuera del alcance del cruce, o pendiente_confirmar).
+  function nucleoDD(value: string | null | undefined) {
+    return (value && nucleoPorCeco.get(value)) || "—";
   }
 
   const queue = role === "compras" ? compras : role === "gerencia" ? gerencia : historial;
@@ -374,12 +384,14 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
     <section className="approval-content">
       <div className="approval-table-area">
         <div className="approval-table-heading"><div><p>{role === "compras" ? "Revisión operativa" : role === "gerencia" ? "Decisión de Gerencia" : "Historial (editar o reabrir)"}</p><h2>{role === "compras" ? "Facturas pendientes de validar" : role === "gerencia" ? "Facturas listas para aprobar" : "Facturas ya avanzadas"}</h2></div></div>
-        <div className="approval-table-wrap">{rows.length || busy ? <table><thead><tr><th>Fecha</th><th>Proveedor</th><th>Folio</th><th>Importe gas</th><th>CECO</th><th>Centro</th>{role !== "gerencia" ? <th>SAP</th> : null}<th>MSEG</th>{role === "historial" ? <th>Estado</th> : null}</tr></thead><tbody>
+        <div className="approval-table-wrap">{rows.length || busy ? <table><thead><tr><th>Fecha</th><th>Proveedor</th><th>Folio</th><th>Importe gas</th><th>CECO</th><th>Núcleo</th><th>Centro</th>{role !== "gerencia" ? <th>SAP</th> : null}<th>MSEG</th>{role === "historial" ? <th>Estado</th> : null}</tr></thead><tbody>
           {rows.map((row) => {
+            const cecoParaNucleo = row.ceco || row.ceco_sugerido || null;
             const cecoInfo = row.ceco ? cecoLabel(row.ceco, cecoNombrePorId) : cecoLabel(row.ceco_sugerido, cecoNombrePorId);
             return <tr aria-label={`Revisar factura ${row.serie || ""}${row.folio || row.uuid}`} className={selected?.uuid === row.uuid ? "is-selected" : ""} key={row.uuid} onClick={() => choose(row)} role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); choose(row); } }}>
               <td>{formatDate(row.fecha)}</td><td title={row.proveedor}>{row.proveedor}</td><td>{row.serie || ""}{row.folio || "—"}</td><td>{formatMoney(row.importe_gas)}</td>
               <td>{cecoInfo ? <span className={`approval-truncate${row.ceco ? "" : " approval-ceco-sugerido"}`} title={cecoInfo.completo}>{cecoInfo.corto}</span> : "Pendiente"}</td>
+              <td>{nucleoDD(cecoParaNucleo)}</td>
               <td>{row.werks_manual || row.sitio_consumo || row.werks || "—"}</td>
               {role !== "gerencia" ? <td>{row.estado_sap ? <span className={`approval-sap-tag${row.estado_sap === "validada_sap" ? " is-ok" : " is-warn"}`}>{row.estado_sap === "validada_sap" ? "Validada" : "Sin match"}</span> : "—"}</td> : null}
               <td>{row.confianza_mseg ? <span className={`approval-sap-tag${row.confianza_mseg === "Alta" ? " is-ok" : " is-warn"}`} title={CONFIANZA_MSEG_LABEL[row.confianza_mseg]}>{row.confianza_mseg}</span> : "—"}</td>
@@ -399,7 +411,7 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
             <div><span>MSEG</span><strong className={selected.confianza_mseg ? "is-good" : "is-warning"}>{selected.confianza_mseg || "Sin evidencia"}</strong></div>
             <div><span>CECO</span><strong className={ceco.trim() || selected.ceco ? "is-good" : "is-warning"}>{ceco.trim() || selected.ceco ? "Asignado" : "Pendiente"}</strong></div>
           </div>
-          <dl className="approval-invoice-data"><dt>Proveedor</dt><dd>{selected.proveedor}</dd><dt>Fecha</dt><dd>{formatDate(selected.fecha)}</dd><dt>Importe gas</dt><dd>{formatMoney(selected.importe_gas)}</dd><dt>Clasificación</dt><dd>{selected.es_mixta ? "Mixta" : "Gas"}</dd><dt>Estado SAP</dt><dd>{selected.estado_sap === "validada_sap" ? "Validada SAP" : "Sin match SAP"}</dd></dl>
+          <dl className="approval-invoice-data"><dt>Proveedor</dt><dd>{selected.proveedor}</dd><dt>Fecha</dt><dd>{formatDate(selected.fecha)}</dd><dt>Importe gas</dt><dd>{formatMoney(selected.importe_gas)}</dd><dt>Clasificación</dt><dd>{selected.es_mixta ? "Mixta" : "Gas"}</dd><dt>Estado SAP</dt><dd>{selected.estado_sap === "validada_sap" ? "Validada SAP" : "Sin match SAP"}</dd><dt>Núcleo</dt><dd>{nucleoDD(selected.ceco || selected.ceco_sugerido)}</dd></dl>
 
           <div className="approval-audit approval-cfdi">
             <p>Información del CFDI</p>

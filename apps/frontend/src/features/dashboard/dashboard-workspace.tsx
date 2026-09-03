@@ -18,12 +18,17 @@ type Props = {
   ultimaActualizacion?: string | null;
 };
 
-type InteractiveFilterKey = "periodo" | "proveedor_id" | "sitio" | "ceco" | "estado_aprobacion" | "estatus_sat" | "confianza_mseg" | "estado_sap";
+type InteractiveFilterKey = "periodo" | "proveedor_id" | "sitio" | "ceco" | "nucleo" | "estado_aprobacion" | "estatus_sat" | "confianza_mseg" | "estado_sap";
 
 // Debe coincidir exactamente con la etiqueta que arma dashboard_engine.py
 // (_gasto_por_ceco) para las facturas con varios CECO reales sin confirmar
 // por ticket todavía -- marca esa barra con tono de aviso (ver charts.tsx).
 const VARIOS_CECO_LABEL = "Varios CECO (sin confirmar)";
+
+// Debe coincidir exactamente con la etiqueta que arma dashboard_engine.py
+// (_gasto_por_nucleo) para las facturas cuyo CeCo no está (todavía) en el
+// cruce Núcleo<->CeCo confirmado -- ver HALLAZGOS-FER.md secc. 11.
+const SIN_NUCLEO_LABEL = "Sin núcleo asignado";
 
 const APPROVAL_LABEL: Record<string, string> = {
   pendiente_validacion_compras: "Pendiente Compras",
@@ -63,7 +68,7 @@ export function DashboardWorkspace({ initialData, initialError, proveedores, ult
   const activeFilterCount = [
     filters.fecha_desde, filters.fecha_hasta, filters.proveedor_id,
     filters.estado_sap, filters.confianza_mseg, filters.estatus_sat,
-    filters.periodo, filters.sitio, filters.ceco, filters.estado_aprobacion
+    filters.periodo, filters.sitio, filters.ceco, filters.nucleo, filters.estado_aprobacion
   ].filter(Boolean).length;
 
   const r = data?.resumen;
@@ -83,6 +88,10 @@ export function DashboardWorkspace({ initialData, initialError, proveedores, ult
     ...(filters.ceco ? [{
       key: "ceco" as const,
       label: `CECO: ${selectionLabels.ceco || (filters.ceco === "__SIN_CECO__" ? "Sin CECO" : filters.ceco === "__VARIOS_CECO__" ? VARIOS_CECO_LABEL : filters.ceco)}`
+    }] : []),
+    ...(filters.nucleo ? [{
+      key: "nucleo" as const,
+      label: `Núcleo: ${selectionLabels.nucleo || (filters.nucleo === "__SIN_NUCLEO__" ? SIN_NUCLEO_LABEL : filters.nucleo)}`
     }] : []),
     ...(filters.estado_aprobacion ? [{
       key: "estado_aprobacion" as const,
@@ -141,7 +150,7 @@ export function DashboardWorkspace({ initialData, initialError, proveedores, ult
     await refresh(nextFilters);
   }
 
-  async function toggleChartFilter(key: Extract<InteractiveFilterKey, "periodo" | "proveedor_id" | "sitio" | "ceco">, item: DashboardGastoItem) {
+  async function toggleChartFilter(key: Extract<InteractiveFilterKey, "periodo" | "proveedor_id" | "sitio" | "ceco" | "nucleo">, item: DashboardGastoItem) {
     await toggleFilter(key, item.filtro, item.grupo);
   }
 
@@ -345,6 +354,14 @@ export function DashboardWorkspace({ initialData, initialError, proveedores, ult
           titulo={`${metricLabel} por CECO`}
           warnLabel={VARIOS_CECO_LABEL}
         />
+        <RankedBarChart
+          activeFilter={filters.nucleo}
+          items={data?.gasto_por_nucleo ?? []}
+          metric={metric}
+          onSelect={(item) => toggleChartFilter("nucleo", item)}
+          titulo={`${metricLabel} por núcleo`}
+          warnLabel={SIN_NUCLEO_LABEL}
+        />
       </div>
     </section>
 
@@ -373,7 +390,7 @@ export function DashboardWorkspace({ initialData, initialError, proveedores, ult
                   <thead>
                     <tr>
                       <th>Fecha</th><th>Proveedor</th><th>Folio</th><th>Coste</th><th>Litros</th>
-                      <th>Flujo</th><th>SAP</th><th>SAT</th><th>MSEG</th><th>Centro</th><th>CECO</th>
+                      <th>Flujo</th><th>SAP</th><th>SAT</th><th>MSEG</th><th>Centro</th><th>CECO</th><th>Núcleo</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -390,6 +407,7 @@ export function DashboardWorkspace({ initialData, initialError, proveedores, ult
                         <td>{row.confianza_mseg === "sin_evidencia" ? "Sin evidencia" : row.confianza_mseg}</td>
                         <td>{row.sitio || "—"}</td>
                         <td>{row.ceco || "—"}</td>
+                        <td>{row.nucleo || "—"}</td>
                       </tr>
                     ))}
                   </tbody>

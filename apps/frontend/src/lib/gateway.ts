@@ -116,6 +116,10 @@ export async function getAprobacionCatalogSitios(_session: FrontendSession): Pro
   return financialbiFetchJson<AprobacionCatalog>("/v1/financialbi/hidrocarburos/aprobacion/catalogo/sitios");
 }
 
+export async function getAprobacionCatalogNucleo(_session: FrontendSession): Promise<AprobacionCatalog> {
+  return financialbiFetchJson<AprobacionCatalog>("/v1/financialbi/hidrocarburos/aprobacion/catalogo/nucleo");
+}
+
 export async function getDashboard(_session: FrontendSession, filtros?: Record<string, unknown>): Promise<DashboardData> {
   return financialbiFetchJson<DashboardData>(`/v1/financialbi/hidrocarburos/dashboard${toQueryString(filtros)}`);
 }

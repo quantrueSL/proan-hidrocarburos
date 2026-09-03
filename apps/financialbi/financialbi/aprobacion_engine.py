@@ -34,6 +34,14 @@ _APROBACION = f"`{_APROBACION_TABLE}`"
 _CECO_CATALOGO = "`proan-quantrue.D00_SANDBOX.proan_CSKT_20260714`"
 _CENTROS = "`proan-quantrue.D20_DIMENSION.dm_centros`"
 
+# HCARB_NUCLEO_TABLE (mismo patron que HCARB_APROBACION_TABLE): permite
+# apuntar al borrador HCARB_dim_nucleo_draft mientras se confirman los
+# ultimos CeCo/nucleo pendientes, sin depender de un nombre hardcodeado. Sin
+# definir, usa el nombre final HCARB_dim_nucleo (todavia no existe -- se crea
+# cuando se promueva el borrador).
+_NUCLEO_TABLE = os.getenv("HCARB_NUCLEO_TABLE", "proan-quantrue.D60_REPORTING.HCARB_dim_nucleo")
+_NUCLEO = f"`{_NUCLEO_TABLE}`"
+
 Rol = Literal["compras", "gerencia"]
 
 ESTADOS = (
@@ -343,6 +351,23 @@ def catalogo_ceco() -> list[dict[str, Any]]:
       JOIN vistos v ON v.ceco = c.KOSTL
       WHERE c.DATBI = '99991231' AND c.LTEXT IS NOT NULL AND c.KOKRS = 'PROA'
       ORDER BY nombre
+    """
+    return _rows(query)
+
+
+def catalogo_nucleo() -> list[dict[str, Any]]:
+    """Sugerencia de solo lectura (no bloqueante, sin <datalist> -- a diferencia
+    de catalogo_ceco()/catalogo_sitios() esto no se captura a mano, solo se
+    muestra junto al CECO ya asignado/sugerido). Cruce Nucleo<->CeCo
+    (dim_nucleo_draft, propuesta Methagas x catalogo real de SAP, ver
+    HALLAZGOS-FER.md secc. 11) -- {id: KOSTL, nombre: nucleo} para reusar el
+    mismo shape/Map que ya arma el frontend para CECO. Solo estado='confirmado'
+    (los 35 pendiente_confirmar todavia no resuelven a un nucleo real)."""
+    query = f"""
+      SELECT ceco AS id, nucleo AS nombre
+      FROM {_NUCLEO}
+      WHERE estado = 'confirmado'
+      ORDER BY nucleo
     """
     return _rows(query)
 

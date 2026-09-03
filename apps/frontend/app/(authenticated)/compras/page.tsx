@@ -2,6 +2,7 @@ import { requireSession } from "@/lib/auth/session";
 import { canDecidirFacturas } from "@/lib/auth/roles";
 import {
   getAprobacionCatalogCeco,
+  getAprobacionCatalogNucleo,
   getAprobacionCatalogSitios,
   getAprobacionCompras,
   getAprobacionHistorial,
@@ -20,21 +21,23 @@ export default async function ComprasPage() {
   let historial: AprobacionQueue = EMPTY_APROBACION_QUEUE;
   let cecos: AprobacionCatalog = { rows: [] };
   let sitios: AprobacionCatalog = { rows: [] };
+  let nucleos: AprobacionCatalog = { rows: [] };
   // Reutiliza el catálogo de M1 (misma tabla de origen) para los filtros de Proveedor/Clave SAT.
   let filtrosCatalog: HydrocarburosCatalog = { fecha_minima: null, fecha_maxima: null, proveedores: [], sitios: [], claves_sat: [] };
   let error: string | null = null;
 
   try {
-    [compras, historial, cecos, sitios, filtrosCatalog] = await Promise.all([
+    [compras, historial, cecos, sitios, nucleos, filtrosCatalog] = await Promise.all([
       getAprobacionCompras(session),
       getAprobacionHistorial(session),
       getAprobacionCatalogCeco(session),
       getAprobacionCatalogSitios(session),
+      getAprobacionCatalogNucleo(session),
       getHydrocarburosCatalog(session)
     ]);
   } catch (cause) {
     error = cause instanceof Error ? cause.message : "No se pudo preparar el portal de compras.";
   }
 
-  return <AprobacionWorkspace cecos={cecos.rows} initialError={error} initialCompras={compras} initialGerencia={EMPTY_APROBACION_QUEUE} initialHistorial={historial} sitios={sitios.rows} proveedores={filtrosCatalog.proveedores} ultimaActualizacion={filtrosCatalog.ultima_actualizacion} puedeRechazar={canDecidirFacturas(session)} roles={["compras", "historial"]} />;
+  return <AprobacionWorkspace cecos={cecos.rows} initialError={error} initialCompras={compras} initialGerencia={EMPTY_APROBACION_QUEUE} initialHistorial={historial} nucleos={nucleos.rows} sitios={sitios.rows} proveedores={filtrosCatalog.proveedores} ultimaActualizacion={filtrosCatalog.ultima_actualizacion} puedeRechazar={canDecidirFacturas(session)} roles={["compras", "historial"]} />;
 }

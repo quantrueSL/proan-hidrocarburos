@@ -18,6 +18,7 @@ from financialbi.aprobacion_engine import (
     aprobar_gerencia,
     capturar_compras,
     catalogo_ceco,
+    catalogo_nucleo,
     catalogo_sitios,
     cola_compras,
     cola_gerencia,
@@ -95,6 +96,7 @@ class DashboardFiltros(BaseModel):
     estado_aprobacion: Literal[
         "pendiente_validacion_compras", "pendiente_aprobacion_gerencia", "aprobada", "rechazada"
     ] | None = None
+    nucleo: str | None = None
     detalle: bool = False
     detalle_sat: bool = False
 
@@ -270,6 +272,15 @@ def financial_aprobacion_catalogo_sitios() -> dict[str, Any]:
         return {"rows": _to_jsonable(catalogo_sitios())}
     except Exception as exc:
         log.exception("aprobacion catalogo sitios error")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/v1/financialbi/hidrocarburos/aprobacion/catalogo/nucleo")
+def financial_aprobacion_catalogo_nucleo() -> dict[str, Any]:
+    try:
+        return {"rows": _to_jsonable(catalogo_nucleo())}
+    except Exception as exc:
+        log.exception("aprobacion catalogo nucleo error")
         raise HTTPException(status_code=500, detail=str(exc))
 
 

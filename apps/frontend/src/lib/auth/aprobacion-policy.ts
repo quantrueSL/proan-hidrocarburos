@@ -57,6 +57,7 @@ export function aprobacionGetRequirement(key: string): AprobacionRequirement {
     case "historial":
     case "catalogo/ceco":
     case "catalogo/sitios":
+    case "catalogo/nucleo":
       return "any";
     case "gerencia":
       return "gerencia";

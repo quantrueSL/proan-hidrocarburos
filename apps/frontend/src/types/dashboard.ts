@@ -32,6 +32,11 @@ export type DashboardData = {
   // Facturas cuyo documento MSEG reparte el gasto entre varios centros sin
   // uno dominante caen en el grupo "Varios CECO (sin confirmar)".
   gasto_por_ceco: DashboardGastoItem[];
+  // Agrupado por Núcleo (dim_nucleo_draft, propuesta Methagas x catálogo SAP
+  // real -- ago-2026). Solo cuenta el CeCo si su fila del cruce está
+  // estado='confirmado'; el resto (fuera de alcance, o pendiente_confirmar)
+  // cae en "Sin núcleo asignado", el grupo mayoritario esperado hoy.
+  gasto_por_nucleo: DashboardGastoItem[];
   gasto_por_periodo: DashboardGastoItem[];
 };
 
@@ -66,6 +71,7 @@ export type DashboardInvoice = {
   estatus_sat: "vigente" | "cancelado" | "sin_confirmar";
   sitio: string;
   ceco: string | null;
+  nucleo: string | null;
 };
 
 export type DashboardInvoiceDetail = {
@@ -84,4 +90,5 @@ export type DashboardFiltros = {
   sitio?: string | null;
   ceco?: string | null;
   estado_aprobacion?: "pendiente_validacion_compras" | "pendiente_aprobacion_gerencia" | "aprobada" | "rechazada" | null;
+  nucleo?: string | null;
 };

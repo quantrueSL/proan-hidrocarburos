@@ -26,7 +26,7 @@ from typing import Any
 
 from google.cloud import bigquery
 
-from financialbi.aprobacion_engine import _APROBACION, _CECO_CATALOGO
+from financialbi.aprobacion_engine import _APROBACION, _CECO_CATALOGO, _NUCLEO
 from financialbi.db import get_bq_client
 from financialbi.hidrocarburos_engine import _FOLIO, _SAP, _VENDORS
 
@@ -53,6 +53,7 @@ def _construir_filtro(
     sitio: str | None = None,
     ceco: str | None = None,
     estado_aprobacion: str | None = None,
+    nucleo: str | None = None,
 ) -> tuple[str, list[bigquery.ScalarQueryParameter]]:
     # f siempre disponible (tabla base); s (_SAP) y e (_ESTATUS_SAT) deben estar
     # JOINeados en TODAS las sub-queries para que este WHERE compartido resuelva
@@ -115,6 +116,41 @@ def _construir_filtro(
     if estado_aprobacion:
         clauses.append("COALESCE(a.estado, 'pendiente_validacion_compras') = @estado_aprobacion")
         params.append(bigquery.ScalarQueryParameter("estado_aprobacion", "STRING", estado_aprobacion))
+    if nucleo == "__SIN_NUCLEO__":
+        # Ninguno de los CeCo de esta factura (el legado o los confirmados por
+        # ticket) aparece en el cruce Nucleo<->CeCo (dim_nucleo_draft, solo
+        # filas estado='confirmado') -- mismo criterio que usa _gasto_por_nucleo
+        # para el bucket 'Sin núcleo asignado': excluye explícitamente las
+        # facturas sin CeCo o con varios CeCo sin confirmar (esas ya tienen su
+        # propio bucket -- __SIN_CECO__/__VARIOS_CECO__, ver filtro ceco=).
+        # NOTA: EXISTS(UNNEST(...)) anidado dentro de otro EXISTS/IN contra
+        # otra tabla no es soportado por BigQuery ("Correlated subqueries that
+        # reference other tables are not supported..." -- verificado en vivo);
+        # por eso se usa IN + JOIN dentro del EXISTS en vez de EXISTS anidado.
+        clauses.append(f"""(
+          COALESCE(a.ceco, s.ceco_sugerido) IS NOT NULL
+          AND STRPOS(COALESCE(a.ceco, s.ceco_sugerido), ',') = 0
+          AND COALESCE(a.ceco, s.ceco_sugerido) NOT IN (
+            SELECT ceco FROM {_NUCLEO} WHERE estado = 'confirmado'
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM UNNEST(JSON_EXTRACT_ARRAY(a.ceco_por_ticket)) AS tj
+            JOIN {_NUCLEO} nuc ON nuc.ceco = JSON_VALUE(tj, '$.ceco')
+            WHERE nuc.estado = 'confirmado'
+          )
+        )""")
+    elif nucleo:
+        clauses.append(f"""(
+          COALESCE(a.ceco, s.ceco_sugerido) IN (
+            SELECT ceco FROM {_NUCLEO} WHERE estado = 'confirmado' AND nucleo = @nucleo
+          )
+          OR EXISTS (
+            SELECT 1 FROM UNNEST(JSON_EXTRACT_ARRAY(a.ceco_por_ticket)) AS tj
+            JOIN {_NUCLEO} nuc ON nuc.ceco = JSON_VALUE(tj, '$.ceco')
+            WHERE nuc.estado = 'confirmado' AND nuc.nucleo = @nucleo
+          )
+        )""")
+        params.append(bigquery.ScalarQueryParameter("nucleo", "STRING", nucleo))
     return " AND ".join(clauses), params
 
 
@@ -163,11 +199,12 @@ def facturas_sat_atencion(
     sitio: str | None = None,
     ceco: str | None = None,
     estado_aprobacion: str | None = None,
+    nucleo: str | None = None,
 ) -> dict[str, Any]:
     """Detalle bajo demanda para el modal SAT del dashboard."""
     where, params = _construir_filtro(
         fecha_desde, fecha_hasta, proveedor_id, estado_sap, confianza_mseg, estatus_sat,
-        periodo, sitio, ceco, estado_aprobacion
+        periodo, sitio, ceco, estado_aprobacion, nucleo
     )
     query = f"""
       SELECT
@@ -276,6 +313,67 @@ def _gasto_por_ceco(where: str, params: list[bigquery.ScalarQueryParameter]) -> 
     return _rows(query, params)
 
 
+def _gasto_por_nucleo(where: str, params: list[bigquery.ScalarQueryParameter]) -> list[dict[str, Any]]:
+    """Igual que _gasto_por_ceco pero agrupando por Nucleo (dim_nucleo_draft,
+    propuesta Methagas de agrupar instalaciones para el umbral de consumo,
+    cruzada contra el catalogo real de SAP -- ver HALLAZGOS-FER.md secc. 11).
+    Solo cuentan las filas estado='confirmado' del cruce -- todavia hay CeCo
+    sin resolver (pendiente_confirmar) que no se usan para agrupar.
+
+    La mayoria de facturas no tienen ningun CeCo dentro del alcance del
+    Excel de nucleos (son CeCo de mantenimiento/administrativos, o el nucleo
+    sigue pendiente_confirmar) -- caen en 'Sin nucleo asignado', el bucket
+    mayoritario esperado hoy, no un error."""
+    query = f"""
+      SELECT
+        CASE
+          WHEN x.ceco IS NULL THEN '__SIN_CECO__'
+          WHEN STRPOS(x.ceco, ',') > 0 THEN '__VARIOS_CECO__'
+          WHEN nuc.nucleo IS NOT NULL THEN nuc.nucleo
+          ELSE '__SIN_NUCLEO__'
+        END AS filtro,
+        CASE
+          WHEN x.ceco IS NULL THEN 'Sin CECO'
+          WHEN STRPOS(x.ceco, ',') > 0 THEN 'Varios CECO (sin confirmar)'
+          WHEN nuc.nucleo IS NOT NULL THEN nuc.nucleo
+          ELSE 'Sin núcleo asignado'
+        END AS grupo,
+        SUM(x.importe_gas) AS importe_gas,
+        SUM(x.volumen_litros) AS volumen_litros,
+        COUNT(DISTINCT x.uuid) AS n_facturas
+      FROM (
+        SELECT
+          f.uuid,
+          CAST(JSON_VALUE(ticket_json, '$.importe_ticket') AS FLOAT64) AS importe_gas,
+          {_volumen_litros()} * SAFE_DIVIDE(CAST(JSON_VALUE(ticket_json, '$.importe_ticket') AS FLOAT64), f.importe_gas) AS volumen_litros,
+          JSON_VALUE(ticket_json, '$.ceco') AS ceco
+        FROM {_FOLIO} f
+        JOIN {_APROBACION} a ON f.uuid = a.uuid AND a.ceco_por_ticket IS NOT NULL
+        LEFT JOIN {_SAP} s ON f.uuid = s.uuid
+        LEFT JOIN {_ESTATUS_SAT} e ON f.uuid = e.uuid,
+          UNNEST(JSON_EXTRACT_ARRAY(a.ceco_por_ticket)) AS ticket_json
+        WHERE {where}
+
+        UNION ALL
+
+        SELECT
+          f.uuid,
+          f.importe_gas,
+          {_volumen_litros()} AS volumen_litros,
+          COALESCE(a.ceco, s.ceco_sugerido) AS ceco
+        FROM {_FOLIO} f
+        LEFT JOIN {_APROBACION} a ON f.uuid = a.uuid
+        LEFT JOIN {_SAP} s ON f.uuid = s.uuid
+        LEFT JOIN {_ESTATUS_SAT} e ON f.uuid = e.uuid
+        WHERE {where} AND a.ceco_por_ticket IS NULL
+      ) x
+      LEFT JOIN {_NUCLEO} nuc ON nuc.ceco = TRIM(x.ceco) AND nuc.estado = 'confirmado'
+      GROUP BY filtro, grupo
+      ORDER BY n_facturas DESC
+    """
+    return _rows(query, params)
+
+
 def _gasto_por_proveedor(where: str, params: list[bigquery.ScalarQueryParameter]) -> list[dict[str, Any]]:
     """Gasto por proveedor (razón social) -- dato disponible desde la propia
     factura, no depende de que Compras/Gerencia hayan avanzado el flujo, así
@@ -349,11 +447,12 @@ def facturas_detalle(
     sitio: str | None = None,
     ceco: str | None = None,
     estado_aprobacion: str | None = None,
+    nucleo: str | None = None,
 ) -> dict[str, Any]:
     """Facturas subyacentes a la selección interactiva del dashboard."""
     where, params = _construir_filtro(
         fecha_desde, fecha_hasta, proveedor_id, estado_sap, confianza_mseg, estatus_sat,
-        periodo, sitio, ceco, estado_aprobacion
+        periodo, sitio, ceco, estado_aprobacion, nucleo
     )
     query = f"""
       SELECT
@@ -374,12 +473,14 @@ def facturas_detalle(
           ELSE 'sin_confirmar'
         END AS estatus_sat,
         COALESCE(a.werks_manual, s.sitio_consumo, 'Sin sitio') AS sitio,
-        COALESCE(a.ceco, s.ceco_sugerido) AS ceco
+        COALESCE(a.ceco, s.ceco_sugerido) AS ceco,
+        COALESCE(nuc.nucleo, 'Sin núcleo asignado') AS nucleo
       FROM {_FOLIO} f
       LEFT JOIN {_VENDORS} v ON f.id_proveedor = v.id_proveedor
       LEFT JOIN {_APROBACION} a ON f.uuid = a.uuid
       LEFT JOIN {_SAP} s ON f.uuid = s.uuid
       LEFT JOIN {_ESTATUS_SAT} e ON f.uuid = e.uuid
+      LEFT JOIN {_NUCLEO} nuc ON nuc.ceco = COALESCE(a.ceco, s.ceco_sugerido) AND nuc.estado = 'confirmado'
       WHERE {where}
       ORDER BY DATE(f.fecha) DESC, proveedor, folio
       LIMIT 200
@@ -403,23 +504,25 @@ def resumen_completo(
     sitio: str | None = None,
     ceco: str | None = None,
     estado_aprobacion: str | None = None,
+    nucleo: str | None = None,
 ) -> dict[str, Any]:
     """Todo el payload del dashboard en una sola llamada de red desde el
-    frontend (aunque internamente sean 5 queries -- una por bloque). Los
+    frontend (aunque internamente sean 6 queries -- una por bloque). Los
     filtros acotan todo el payload a la vez, para que los números siempre
     concuerden entre KPIs y gráficos."""
     where, params = _construir_filtro(
         fecha_desde, fecha_hasta, proveedor_id, estado_sap, confianza_mseg, estatus_sat,
-        periodo, sitio, ceco, estado_aprobacion
+        periodo, sitio, ceco, estado_aprobacion, nucleo
     )
     # Cada query de BigQuery tiene un overhead apreciable de creación/espera
     # aunque el resultado esté cacheado. Son bloques independientes y el cliente
     # compartido es seguro entre hilos, así que se ejecutan concurrentemente.
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    with ThreadPoolExecutor(max_workers=6) as executor:
         resumen_future = executor.submit(_resumen_estatus, where, params)
         proveedor_future = executor.submit(_gasto_por_proveedor, where, params)
         sitio_future = executor.submit(_gasto_por_sitio, where, params)
         ceco_future = executor.submit(_gasto_por_ceco, where, params)
+        nucleo_future = executor.submit(_gasto_por_nucleo, where, params)
         periodo_future = executor.submit(_gasto_por_periodo, where, params)
 
     return {
@@ -427,5 +530,6 @@ def resumen_completo(
         "gasto_por_proveedor": proveedor_future.result(),
         "gasto_por_sitio": sitio_future.result(),
         "gasto_por_ceco": ceco_future.result(),
+        "gasto_por_nucleo": nucleo_future.result(),
         "gasto_por_periodo": periodo_future.result(),
     }

@@ -5,7 +5,7 @@ Romeo (rama `Fer`, todos del 26-ago-2026). Fuente cruzada: diff real de cada
 commit (`git show <hash>`) + [`ConsultasBigQuery/README.md`](ConsultasBigQuery/README.md),
 que ya documenta la iteración completa con cifras verificadas contra BigQuery.
 
-Orden de los 9 commits (oldest→newest):
+Orden de los 9 commits de Fernando (oldest→newest), más el nuestro (10):
 
 1. `a55decd` — Migrar M1 de `D00_SANDBOX.cfdis` a `D30_INTEGRATION.cfdi_completo`
 2. `e59df96` — Dedup por UUID+concepto_idx en vez de por contenido (M1)
@@ -16,6 +16,11 @@ Orden de los 9 commits (oldest→newest):
 7. `87988c4` — CECO por ticket también con un solo ticket exacto (M2, D33)
 8. `488d6b6` — Filtro "CECO sugerido" en las colas de aprobación
 9. `a0fa60d` — Documentar la iteración completa en el README
+10. `9a1eb42` — CECO por ticket en Módulo 3: captura, reparto en dashboard, 2
+    fixes de concurrencia (2026-09-02, no es de Fernando — ver sección propia
+    más abajo)
+11. Sin commit todavía — Dimensión "Núcleo" en el Dashboard (2026-09-03, no es
+    de Fernando — ver sección propia más abajo)
 
 ---
 
@@ -434,9 +439,14 @@ orden:
      `HCARB_GOLD_VALIDACION_SAP_fer` y `HCARB_gold_aprobacion_fer` (esta
      última añadida hoy, ver sección "CECO por ticket/línea" más abajo) en
      BigQuery.
-   - Las 3 líneas `HCARB_FOLIO_TABLE=`/`HCARB_SAP_TABLE=`/
-     `HCARB_APROBACION_TABLE=` en `config/financialbi.env` (para que el
-     backend local vuelva a leer las tablas reales).
+   - `HCARB_dim_nucleo_draft` (secc. 11) es un caso distinto: no se borra, se
+     **promueve** (rename/CREATE OR REPLACE a `HCARB_dim_nucleo` sin sufijo)
+     una vez se reduzcan los 35 `pendiente_confirmar` -- ver el checklist
+     propio de esa sección.
+   - Las 4 líneas `HCARB_FOLIO_TABLE=`/`HCARB_SAP_TABLE=`/
+     `HCARB_APROBACION_TABLE=`/`HCARB_NUCLEO_TABLE=` en
+     `config/financialbi.env` (para que el backend local vuelva a leer las
+     tablas reales).
 4. **Mergear la rama `Fer` a `main`** una vez hecho lo anterior.
 
 Nada de esto se ha aplicado todavía — todo lo probado corre en local contra
@@ -444,7 +454,7 @@ las tablas `_fer`, sin tocar lo que lee producción hoy.
 
 ---
 
-## CECO por ticket/línea en el Módulo 3 (trabajo nuevo, 2026-09-02, no es de Fernando)
+## 10. `9a1eb42` — CECO por ticket/línea en el Módulo 3 (2026-09-02, no es de Fernando)
 
 Al revisar el commit 8 (`488d6b6`) en Docker local, se encontró un caso real
 (**GCRE11785**, Distribuidora de Gas Noel, `uuid=9591c636-4e25-4477-9d65-87b14305d9a6`)
@@ -524,9 +534,7 @@ pasar a ambos sin más). Tabla de prueba `HCARB_gold_aprobacion_fer`
 deduplicada (`CREATE OR REPLACE` con `ROW_NUMBER() OVER (PARTITION BY uuid)`)
 antes de seguir probando. No hizo falta tocar la tabla real (sin duplicados).
 
----
-
-## Revisión del dashboard tras "CECO por ticket" (2026-09-02, trabajo nuevo)
+### Revisión del dashboard tras "CECO por ticket" (parte del mismo commit `9a1eb42`)
 
 Al revisar la pestaña Dashboard con los cambios ya hechos, surgieron 3
 mejoras sobre el gráfico "gasto por CECO" (`_gasto_por_ceco` en
@@ -570,3 +578,163 @@ Quedaron 2 mejoras propuestas y aparcadas a propósito (decisión de producto,
 no bug): un KPI dedicado para "facturas con CECO sin confirmar" fuera del
 gráfico, y ver si el filtro `__VARIOS_CECO__` resulta útil en la práctica una
 vez el equipo use esto una temporada.
+
+### Cómo pasar el commit `9a1eb42` a producción
+
+**Depende del punto 1 del checklist general** ("Qué falta para pasar todo
+esto a producción", más arriba): este commit usa columnas
+(`tickets_mseg`, `ceco_sugerido`, `ceco_sugerido_origen`, `mseg_n_tickets`,
+`mseg_n_tickets_match`) que **hoy solo existen en la tabla de prueba**
+`HCARB_GOLD_VALIDACION_SAP_fer`, no en la tabla real
+`HCARB_GOLD_VALIDACION_SAP` (que sigue siendo la de julio). Si este commit
+se despliega a producción **antes** de ejecutar `HCARB_gold_validacion_sap.sql`
+contra la tabla real, el backend rompe con el mismo error que vimos en local
+antes de aislar `HCARB_gold_aprobacion` (`400 Name tickets_mseg not found
+inside s`) en cuanto alguien abra la Cola de Compras o el dashboard.
+
+Orden correcto:
+
+1. Ejecutar los `.sql` reales (`HCARB_gold_clasificacion.sql`,
+   `HCARB_gold_validacion_sap.sql`) contra `HCARB_GOLD_CLASIFICACION_FOLIO`/
+   `HCARB_GOLD_VALIDACION_SAP` reales (paso 1 del checklist general —
+   requiere confirmación explícita, afecta producción).
+2. Desplegar el código de `9a1eb42` (backend + frontend). La columna nueva
+   `ceco_por_ticket` en `HCARB_gold_aprobacion` **se crea sola**: el `ALTER
+   TABLE ... ADD COLUMN IF NOT EXISTS` corre en `ensure_schema()` al
+   arrancar el backend, contra la tabla real (en producción no existe
+   `HCARB_APROBACION_TABLE`, así que `_APROBACION_TABLE` ya apunta directo a
+   la real) — no hace falta ninguna migración manual.
+3. El fix de `sync_pendientes()` (`MERGE` en vez de `INSERT...SELECT`) llega
+   solo con el despliegue del código, sin acción aparte. **No hace falta
+   deduplicar nada en producción** — ya verificamos que la tabla real no
+   tenía duplicados (641 filas = 641 UUIDs, el bug nunca se disparó ahí).
+4. Verificar tras desplegar: cargar la Cola de Compras y el Dashboard en
+   producción y confirmar que no hay error 500 (sería la señal de que el
+   paso 1 no se hizo antes).
+5. Cuando se confirme el paso a producción, quitar las 3 líneas
+   `HCARB_FOLIO_TABLE=`/`HCARB_SAP_TABLE=`/`HCARB_APROBACION_TABLE=` de
+   `config/financialbi.env` (ya estaba en el checklist general, ahora con
+   la tercera línea añadida por este commit).
+
+---
+
+## 11. Sin commit todavía — Dimensión "Núcleo" en el Dashboard (2026-09-03, no es de Fernando)
+
+Aparte de los 9 commits de Fernando, Methagas compartió una propuesta en Excel
+("Propuesta de relación de núcleos e instalaciones asociadas PROAN.xlsx", raíz
+del repo) para agrupar instalaciones de gas en **núcleos** por entidad
+federativa (Jalisco, Chihuahua, San Luis Potosí), relevante para el umbral
+mínimo de consumo de gas. El Excel da nombres (núcleo → instalación → CeBe tal
+como aparece en SAP por proveedor), no códigos KOSTL reales.
+
+**Cruce Núcleo↔CeCo (`HCARB_dim_nucleo_draft`, `D60_REPORTING`):** de los 101
+nombres de CeBe distintos en las 5 hojas del Excel, se cruzaron contra el
+catálogo real de SAP (`proan_CSKT_20260714`) y contra uso real en
+`proan_MSEG_HIDROCARBUROS_20260714` **filtrado por el proveedor correcto de
+cada fila** (no en agregado — un primer intento sin ese filtro habría elegido
+mal en al menos un caso real, "Santa Elena Sitio 1", donde el candidato con más
+uso total resultó ser de un proveedor totalmente distinto). Resultado: **92
+filas, 57 `confirmado`** (con su KOSTL real) y **35 `pendiente_confirmar`**
+(sin candidato de texto, o candidatos sin ninguna línea de gas real bajo el
+proveedor esperado). Detalle completo revisado con el usuario en un artefacto
+interactivo antes de cargar la tabla.
+
+### Integración en el Dashboard
+
+Mismo contrato que `_FOLIO`/`_SAP`/`_APROBACION`: nueva `_NUCLEO_TABLE` en
+`aprobacion_engine.py` (`os.getenv("HCARB_NUCLEO_TABLE", ".../HCARB_dim_nucleo")`),
+línea `HCARB_NUCLEO_TABLE=...HCARB_dim_nucleo_draft` en `config/financialbi.env`
+(dev). El nombre final `HCARB_dim_nucleo` (sin sufijo) no existe todavía.
+
+- **`dashboard_engine.py`**: nueva `_gasto_por_nucleo` (mismo esqueleto que
+  `_gasto_por_ceco`, con reparto por ticket confirmado vía `UNION ALL`), `LEFT
+  JOIN` contra `_NUCLEO` (`estado = 'confirmado'` solamente). `_construir_filtro`
+  gana el parámetro `nucleo` (`__SIN_NUCLEO__` o un núcleo real), reenviado
+  desde las 3 funciones que ya comparten el filtro (`facturas_sat_atencion`,
+  `facturas_detalle`, `resumen_completo`). `facturas_detalle` añade la columna
+  `nucleo` al detalle del drill-down.
+- **`app.py`**: `DashboardFiltros` gana `nucleo: str | None`. Sin cambios en el
+  endpoint (ya reenvía `**values` genéricamente).
+- **Frontend**: `DashboardData.gasto_por_nucleo`, `DashboardFiltros.nucleo`,
+  `DashboardInvoice.nucleo` en `types/dashboard.ts`. Un 5º `RankedBarChart`
+  ("... por núcleo") en el grid de análisis de `dashboard-workspace.tsx`, con
+  `warnLabel="Sin núcleo asignado"` (mismo patrón de tono de aviso que
+  `VARIOS_CECO_LABEL`), chip de filtro, y columna "Núcleo" en la tabla de
+  detalle. Sin catálogo/`<datalist>` nuevo: a diferencia del CECO de la Cola de
+  Compras, el filtro de núcleo del dashboard se activa haciendo clic en una
+  barra, igual que `sitio`/`ceco` hoy.
+
+**Expectativa correcta, no un bug:** la mayoría de facturas no tienen ningún
+CeCo dentro del alcance del Excel de núcleos (son CeCo de mantenimiento/
+administrativos, o su núcleo sigue `pendiente_confirmar`) — caen en "Sin
+núcleo asignado", el bucket mayoritario hoy (182 de 614 facturas de prueba con
+CeCo real y sin ambigüedad; aparte quedan 129 "Sin CECO" y 248 "Varios CECO
+sin confirmar", que son buckets propios, no cuentan como "sin núcleo").
+
+### Bug encontrado y corregido de paso: BigQuery no soporta doble subconsulta correlacionada anidada
+
+El primer intento de `_construir_filtro` para `nucleo=` reusó literalmente el
+patrón del filtro `ceco=` (un `EXISTS(SELECT ... FROM UNNEST(a.ceco_por_ticket) WHERE JSON_VALUE(...) = @ceco)`), pero envuelto en un `EXISTS` adicional contra
+`_NUCLEO` (necesario porque ahora hay que resolver el nombre del núcleo, no
+comparar directo). BigQuery lo rechaza en tiempo de ejecución: *"Correlated
+subqueries that reference other tables are not supported unless they can be
+de-correlated"* — un `EXISTS`/`UNNEST` correlacionado contra la factura (`a`)
+anidado dentro de otra subconsulta contra una tabla distinta (`_NUCLEO`) no se
+puede decorrelacionar, aunque el `dry_run` no lo detecta (solo falla al
+ejecutar). Reproducido y aislado en 3 pasos contra BigQuery real antes de
+tocar el código de producción.
+
+**Fix:** reescrito sin anidar subconsultas correlacionadas contra tablas
+distintas — el lado `_NUCLEO` se resuelve como un `IN (SELECT ceco FROM
+_NUCLEO WHERE ...)` (no correlacionado, solo filtrado por parámetro) y el lado
+`ceco_por_ticket` como un `JOIN` dentro del propio `EXISTS` (`FROM
+UNNEST(...) JOIN _NUCLEO ON ...`), en vez de un `EXISTS` anidado. Verificado
+contra BigQuery real que el conteo coincide exacto con `_gasto_por_nucleo`
+(32 facturas para "Reproducción de Aves", 182 para "Sin núcleo asignado").
+
+**Verificado end-to-end** contra Docker local + BigQuery real: endpoint
+`/v1/financialbi/hidrocarburos/dashboard` devuelve `gasto_por_nucleo` idéntico
+a la consulta directa; filtrar por un núcleo real y por `__SIN_NUCLEO__` en el
+drill-down (`detalle=true`) devuelve exactamente los totales esperados (32 y
+182). Frontend compila sin errores (`Compiled /dashboard in 1103ms`). Falta
+confirmación visual en el navegador (fuera del alcance de este entorno).
+
+### Extensión: Núcleo también en Módulo 3 (Cola de Compras/Gerencia/Historial)
+
+A petición del usuario tras ver el gráfico del dashboard ("no veo el núcleo en
+los filtros ni en los detalles de la factura ni en las tablas, ¿dónde más se
+puede poner?"): Módulo 1 no aplica (esa evidencia "vive en el Portal de
+Aprobación" según el propio código), pero Módulo 3 sí — ya muestra el CECO por
+factura y no el núcleo al que pertenece.
+
+- **`aprobacion_engine.py`**: nueva `catalogo_nucleo()` (mismo patrón que
+  `catalogo_ceco()`/`catalogo_sitios()`, pero de solo lectura -- sin
+  `<datalist>`, no se captura a mano): `{id: ceco, nombre: nucleo}` desde
+  `_NUCLEO` para `estado = 'confirmado'`.
+- **`app.py`**: endpoint nuevo `GET .../aprobacion/catalogo/nucleo`.
+- **Frontend**: mismo cableado que `catalogo/ceco` (política de auth, proxy
+  Next.js, `gateway.ts`) — pero a diferencia de CECO/sitio, Gerencia **sí**
+  recibe el catálogo real (es de solo lectura, no un formulario de captura).
+  `aprobacion-workspace.tsx` gana una columna "Núcleo" en la tabla de las 3
+  colas y una línea "Núcleo" en el detalle de cada factura (resuelto por el
+  CECO confirmado, o el sugerido si Compras aún no ha decidido).
+
+**Verificado**: endpoint `catalogo/nucleo` devuelve 57 filas reales; `/compras`
+y `/aprobacion` compilan sin errores (892ms/740 módulos y 851ms/703 módulos).
+
+### Cómo pasar esto a producción
+
+Además del checklist general (punto 1, `.sql` reales) y de que el commit se
+despliegue con el resto del código:
+
+1. **No hace falta migración de esquema** — `HCARB_dim_nucleo`/`_draft` es una
+   tabla de catálogo nueva, no algo que `ensure_schema()` cree; se carga con
+   `bq load` una vez.
+2. **Antes de ir a producción, promover el borrador**: renombrar/recrear
+   `HCARB_dim_nucleo_draft` como `HCARB_dim_nucleo` (sin sufijo) en
+   `D60_REPORTING` — idealmente después de reducir los 35
+   `pendiente_confirmar` con el equipo/Methagas, aunque no es bloqueante
+   (las filas `pendiente_confirmar` simplemente no cuentan para ningún
+   núcleo, caen en "Sin núcleo asignado").
+3. Quitar la línea `HCARB_NUCLEO_TABLE=` de `config/financialbi.env` cuando se
+   confirme (mismo patrón que las otras 3 líneas del checklist general).
