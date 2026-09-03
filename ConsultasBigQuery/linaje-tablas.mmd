@@ -1,7 +1,7 @@
 flowchart LR
-    subgraph Fuentes["Fuentes (BigQuery, Fase 1)"]
+    subgraph Fuentes["Fuentes (BigQuery)"]
         dm_vendors["D20_DIMENSION.dm_vendors"]
-        cfdis["D00_SANDBOX.cfdis"]
+        cfdi_completo["D30_INTEGRATION.cfdi_completo<br/>(ago-2026, reemplaza D00_SANDBOX.cfdis)"]
         bkpf["D30_INTEGRATION.bkpf_account_document_header"]
         ekbe["D30_INTEGRATION.sap_ekbe"]
         po["D30_INTEGRATION.sap_purchasing_orders"]
@@ -29,17 +29,22 @@ flowchart LR
         estatus_sat["D60.HCARB_ESTATUS_SAT"]
     end
 
-    backend["Backend FastAPI<br/>(aprobacion_engine.py)"]
+    subgraph Catalogos["Catálogo HCARB_* (bq load manual, no query)"]
+        nucleo["D60.HCARB_dim_nucleo<br/>(cruce Núcleo↔CeCo, propuesta Methagas x SAP)"]
+    end
+
+    backend["Backend FastAPI<br/>(aprobacion_engine.py / dashboard_engine.py)"]
     webservice["Webservice SAT<br/>(estatus_sat.py)"]
 
     dm_vendors --> q1
     q1 --> stg_vendors
 
-    cfdis --> q2
+    cfdi_completo --> q2
     stg_vendors --> q2
     q2 --> gold_folio
 
     gold_folio --> q3
+    cfdi_completo -->|"NoIdentificacion por línea<br/>(desglose por ticket, ago-2026)"| q3
     bkpf --> q3
     ekbe --> q3
     po --> q3
@@ -51,6 +56,8 @@ flowchart LR
     q3 --> gold_sap
 
     gold_folio -.-> backend
+    gold_sap -.-> backend
+    nucleo -.->|"CECO -> Núcleo<br/>(dashboard + M3, solo lectura)"| backend
     backend -.->|INSERT/UPDATE por acción de Compras/Gerencia| gold_aprob
 
     gold_folio -.-> webservice
