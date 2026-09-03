@@ -1,0 +1,27 @@
+# Construye la imagen de facturas-api. Contexto = raíz del repo, igual que
+# deploy/cloudrun/cloudbuild.yaml.
+#
+#   gcloud builds submit . --config=deploy/cloudrun-facturas-api/cloudbuild.yaml \
+#     --substitutions=_REPO=...,_TAG=...
+#
+# DOCKER_BUILDKIT=1 obligatorio: el Dockerfile usa `RUN --mount=type=cache`.
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: facturas-api
+    env: ["DOCKER_BUILDKIT=1"]
+    args:
+      - build
+      - -f
+      - apps/facturas-api/Dockerfile
+      - -t
+      - ${_REPO}/facturas-api:${_TAG}
+      - .
+
+images:
+  - ${_REPO}/facturas-api:${_TAG}
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1800s

@@ -160,8 +160,13 @@ El backend usa un **workspace uv**: `pyproject.toml` + `uv.lock` en la raíz. Tr
 cambiar dependencias en `apps/financialbi/pyproject.toml`, regenera el lock:
 
 ```bash
-# uv no hace falta instalarlo en el host; se usa vía contenedor:
-docker run --rm -v "${PWD}:/w" -w /w ghcr.io/astral-sh/uv:latest uv lock
+# uv no hace falta instalarlo en el host; se usa vía contenedor.
+# OJO: la variante ":latest" es una imagen mínima pensada solo para
+# "COPY --from=... /uv" dentro de un Dockerfile (así la usan los Dockerfile
+# de este repo) -- no trae ni siquiera /bin/sh, así que corrida standalone
+# falla con "Failed to discover managed Python installations". Para correrla
+# suelta hace falta la variante con Python + Debian incluidos:
+docker run --rm -v "${PWD}:/w" -w /w ghcr.io/astral-sh/uv:python3.11-bookworm-slim uv lock
 ```
 
 ## Producción / despliegue

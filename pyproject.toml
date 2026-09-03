@@ -18,6 +18,7 @@ requires-python = ">=3.11,<3.12"
 [tool.uv.workspace]
 members = [
     "apps/financialbi",
+    "apps/facturas-api",
 ]
 
 [dependency-groups]

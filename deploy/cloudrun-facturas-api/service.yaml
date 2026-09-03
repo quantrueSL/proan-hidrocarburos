@@ -1,0 +1,45 @@
+# Servicio Cloud Run de facturas-api: UN solo contenedor, independiente de
+# `plataforma-hidrocarburos` (deploy/cloudrun/).
+#
+# A diferencia del backend de financialbi (sidecar sin URL pública, ver
+# deploy/cloudrun/service.yaml), este servicio SÍ necesita ser alcanzable --
+# pero no directamente por cualquiera: la idea es que solo API Gateway pueda
+# invocarlo (ver README.md de esta carpeta, pendiente de configurar), nunca
+# `allUsers`. Por eso `deploy.sh` no añade ningún IAM binding público.
+#
+# Los placeholders __REPO__, __TAG__ y __SERVICE_ACCOUNT__ los rellena deploy.sh.
+
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: facturas-api
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "5"
+    spec:
+      serviceAccountName: __SERVICE_ACCOUNT__
+      containerConcurrency: 40
+      timeoutSeconds: 60
+      containers:
+        - name: facturas-api
+          image: __REPO__/facturas-api:__TAG__
+          ports:
+            - name: http1
+              containerPort: 8080
+          env:
+            - name: BQ_PROJECT_ID
+              value: proan-quantrue
+            - name: BQ_LOCATION
+              value: us-west4
+            # Sin BQ_CREDENTIALS_PATH a propósito: db.py cae a las credenciales
+            # de aplicación, que aquí son la identidad del servicio.
+          resources:
+            limits:
+              cpu: "1"
+              # WeasyPrint (Pango/Cairo) + reconstrucción de XML: 512Mi se
+              # queda corto en facturas grandes (ej. la de 131 conceptos
+              # probada en la investigación).
+              memory: 1Gi
