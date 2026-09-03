@@ -23,8 +23,7 @@ config/bq_credentials.json
 deploy/nginx/.htpasswd
 
 # Material que no participa en los builds.
-Datos/
+docs/data/
 ConsultasBigQuery/
-Primera-iteracion/
 Airflow/
 .claude/

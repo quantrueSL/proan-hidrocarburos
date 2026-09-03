@@ -314,9 +314,10 @@ def _gasto_por_ceco(where: str, params: list[bigquery.ScalarQueryParameter]) -> 
 
 
 def _gasto_por_nucleo(where: str, params: list[bigquery.ScalarQueryParameter]) -> list[dict[str, Any]]:
-    """Igual que _gasto_por_ceco pero agrupando por Nucleo (dim_nucleo_draft,
+    """Igual que _gasto_por_ceco pero agrupando por Nucleo (HCARB_dim_nucleo,
     propuesta Methagas de agrupar instalaciones para el umbral de consumo,
-    cruzada contra el catalogo real de SAP -- ver HALLAZGOS-FER.md secc. 11).
+    cruzada contra el catalogo real de SAP -- ver
+    docs/data/naturaleza-de-los-datos.md y ConsultasBigQuery/README.md).
     Solo cuentan las filas estado='confirmado' del cruce -- todavia hay CeCo
     sin resolver (pendiente_confirmar) que no se usan para agrupar.
 

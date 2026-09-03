@@ -7,7 +7,7 @@
 -- ser por UUID+concepto_idx -- ver nota más abajo, el dedup por contenido ya no es seguro
 -- cuando una factura trae decenas de líneas.
 -- importe_gas parte de SubTotal (validado por el SAT), no de sumar Importe de línea --
--- ver el FIX jul-2026 más abajo y Datos/naturaleza-de-los-datos.md. El "74% de facturas
+-- ver el FIX jul-2026 más abajo y docs/data/naturaleza-de-los-datos.md. El "74% de facturas
 -- mixtas" que motivó originalmente sumar por línea (Fase 1 §16) resultó ser el mismo bug
 -- de líneas faltantes en cfdis, no mezcla real de producto -- con el fix, 0 facturas son
 -- mixtas de verdad.
