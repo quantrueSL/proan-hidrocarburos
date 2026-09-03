@@ -236,6 +236,7 @@ name = "facturas-api"
 version = "0.1.0"
 source = { editable = "apps/facturas-api" }
 dependencies = [
+    { name = "cryptography" },
     { name = "fastapi" },
     { name = "google-auth" },
     { name = "google-cloud-bigquery" },
@@ -248,6 +249,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cryptography", specifier = ">=42.0" },
     { name = "fastapi", specifier = "==0.115.9" },
     { name = "google-auth", specifier = ">=2.0" },
     { name = "google-cloud-bigquery", specifier = ">=3.25.0" },

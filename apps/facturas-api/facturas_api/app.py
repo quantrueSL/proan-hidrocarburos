@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from facturas_api import repository
 from facturas_api.reconstruccion import ReconstruccionInvalida, parse_reconstruido, reconstruir_xml
 from facturas_api.render_pdf import render as render_pdf
+from facturas_api.verificacion import VerificacionSelloError, verificar_sello
 
 log = logging.getLogger(__name__)
 
@@ -71,6 +72,19 @@ def _a_metadata(row: dict[str, Any]) -> FacturaMetadata:
             "pdf": f"/v1/facturas/{uuid}/pdf",
         },
     )
+
+
+def _avisar_si_sello_invalido(uuid: str, xml_root) -> None:
+    """No bloquea nunca la respuesta -- solo deja rastro en el log si el
+    sello de una factura concreta no valida, para poder investigarlo. Ver
+    facturas_api/verificacion.py: probado contra dos facturas reales
+    (validan las dos), así que un fallo aquí sería una anomalía real digna
+    de mirar, no un falso positivo esperado."""
+    try:
+        if not verificar_sello(xml_root):
+            log.warning("factura uuid=%s: el sello CFDI no valida contra el certificado embebido", uuid)
+    except VerificacionSelloError:
+        log.warning("factura uuid=%s: no se pudo verificar el sello (falta Sello o Certificado)", uuid)
 
 
 def _nombre_archivo(row: dict[str, Any], uuid: str, extension: str) -> str:
@@ -138,6 +152,8 @@ def obtener_xml(uuid: str) -> Response:
         log.exception("factura xml reconstruccion error uuid=%s", uuid)
         raise _error(503, "generacion_no_disponible", str(exc)) from exc
 
+    _avisar_si_sello_invalido(uuid, parse_reconstruido(xml_bytes))
+
     filename = _nombre_archivo(row, uuid, "xml")
     return Response(
         content=xml_bytes,
@@ -161,6 +177,7 @@ def obtener_pdf(uuid: str) -> Response:
     try:
         xml_bytes = reconstruir_xml(comprobante_json)
         xml_root = parse_reconstruido(xml_bytes)
+        _avisar_si_sello_invalido(uuid, xml_root)
         cancelado = row.get("estatus_cancelacion") == "cancelado"
         pdf_bytes = render_pdf(xml_root, cancelado=cancelado)
     except ReconstruccionInvalida as exc:
