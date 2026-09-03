@@ -1,10 +1,16 @@
 -- Módulo 1 (clasificación): tabla grano UUID (factura completa).
 -- Universo (D1/D2, provisional): ReceptorRfc='PAN921013AK7' (Proteína Animal) y >=1 línea
 -- con ClaveProdServ de gas (151115xx producto, 83101600/83101601 GNC servicio).
--- Dedup obligatorio antes de sumar (hallazgo Fase 1 §18): (UUID, ClaveProdServ, Cantidad,
--- Importe, Descripcion) -- 24 de 1.051 facturas traen 2 filas exactas duplicadas del mismo
--- concepto.
--- importe_gas parte de SubTotal, no de sumar Importe de línea (ver más abajo).
+-- Dedup obligatorio antes de sumar (hallazgo Fase 1 §18): 24 de 1.051 facturas traían 2 filas
+-- exactas duplicadas del mismo concepto (cfdis, sin concepto_idx -- dedup por contenido:
+-- ClaveProdServ+Cantidad+Importe+Descripcion). Con cfdi_completo (ago-2026) el dedup pasa a
+-- ser por UUID+concepto_idx -- ver nota más abajo, el dedup por contenido ya no es seguro
+-- cuando una factura trae decenas de líneas.
+-- importe_gas parte de SubTotal (validado por el SAT), no de sumar Importe de línea --
+-- ver el FIX jul-2026 más abajo y Datos/naturaleza-de-los-datos.md. El "74% de facturas
+-- mixtas" que motivó originalmente sumar por línea (Fase 1 §16) resultó ser el mismo bug
+-- de líneas faltantes en cfdis, no mezcla real de producto -- con el fix, 0 facturas son
+-- mixtas de verdad.
 --
 -- D26 (jul-2026): originalmente había también HCARB_GOLD_CLASIFICACION_LINEA (grano
 -- línea-concepto, D12/D19) para desglosar facturas mixtas. Se eliminó: al ejecutar salió
@@ -41,6 +47,31 @@
 -- ~jun-2025 (Fase 1 §19.5) -- ~7 meses que MSEG nunca podrá validar porque el dato no existe
 -- en SAP para ese rango. Se corta aquí (único punto, todo lo demás hereda vía JOIN/lectura
 -- de esta tabla) exigiendo FechaTimbrado Y Fecha >= el cutoff, no solo uno de los dos.
+--
+-- Fuente D30_INTEGRATION.cfdi_completo (ago-2026, reemplaza D00_SANDBOX.cfdis): cfdis
+-- venía incompleta -- para 414/547 facturas del universo de gas solo traía 1 línea (de gas)
+-- aunque SubTotal exigiera más (ver el FIX "importe_gas" más abajo, que hasta ahora
+-- compensaba esa carencia restando desde SubTotal en vez de sumar líneas). cfdi_completo
+-- trae TODAS las líneas por factura (grano UUID+concepto_idx, mismas columnas que cfdis).
+-- Verificado contra BigQuery real (ago-2026): mismo universo de facturas del receptor
+-- (277.489 vs 277.446 UUID, prácticamente igual) pero con casi el doble de líneas
+-- (543.759 vs 278.776) -- confirma que antes faltaban líneas, no que haya facturas nuevas.
+-- cfdi_completo trae además filas exactamente duplicadas por reingesta (1.675 pares
+-- UUID+concepto_idx con contenido idéntico, mismo _id).
+--
+-- Dedup por UUID+concepto_idx, NO por contenido (ago-2026): el dedup original (por
+-- ClaveProdServ+Cantidad+Importe+Descripcion) daba por hecho que dos líneas con esos 4
+-- valores iguales eran la misma línea reingresada -- válido con cfdis (1 línea/factura,
+-- nunca colisionaba) pero no con cfdi_completo, donde una factura trae hasta 49 líneas y
+-- es normal que dos conceptos DISTINTOS compartan producto+cantidad+precio+descripción
+-- (p.ej. dos entregas iguales el mismo día). Medido contra BigQuery real: 217/614 facturas
+-- de gas tenían colisiones así, perdiendo 1.273 líneas reales -- sin efecto en importe_gas
+-- ni es_mixta (0 facturas cambiaban, la colisión siempre caía dentro de la misma categoría
+-- gas/no-gas), pero sí en n_lineas_total/conceptos_gas (la evidencia auditable de M1).
+-- concepto_idx es el índice posicional real de la línea dentro del CFDI -- una reingesta
+-- duplica el mismo concepto_idx (mismo _id, confirmado), así que dedupear por
+-- UUID+concepto_idx (quedándonos con el _ingested_at más reciente) colapsa solo eso, nunca
+-- líneas legítimamente distintas.
 DECLARE cutoff_fecha_negocio DATE DEFAULT '2026-01-01';
 
 CREATE OR REPLACE TABLE `proan-quantrue.D60_REPORTING.HCARB_GOLD_CLASIFICACION_FOLIO` AS
@@ -49,10 +80,10 @@ WITH cfdis_dedup AS (
   FROM (
     SELECT *,
       ROW_NUMBER() OVER (
-        PARTITION BY UUID, ClaveProdServ, CAST(Cantidad AS STRING), CAST(Importe AS STRING), Descripcion
-        ORDER BY FechaTimbrado
+        PARTITION BY UUID, concepto_idx
+        ORDER BY _ingested_at DESC
       ) AS rn
-    FROM `proan-quantrue.D00_SANDBOX.cfdis`
+    FROM `proan-quantrue.D30_INTEGRATION.cfdi_completo`
     WHERE ReceptorRfc = 'PAN921013AK7'
       AND DATE(FechaTimbrado) >= cutoff_fecha_negocio
       AND DATE(Fecha) >= cutoff_fecha_negocio
@@ -87,7 +118,23 @@ SELECT
   ANY_VALUE(c.SubTotal) AS subtotal,
   ANY_VALUE(c.Total) AS total,
   ANY_VALUE(c.TotalImpuestosTrasladados) AS total_impuestos_trasladados,
+  -- FIX jul-2026 (investigación confianza_mseg): importe_gas ya NO suma solo las líneas
+  -- de gas que trae cfdis -- para 414/547 facturas cfdis solo trae 1 línea (de gas,
+  -- internamente consistente: Cantidad*ValorUnitario=Importe) mientras SubTotal es 17-22x
+  -- mayor -- el SAT exige SubTotal=suma de TODOS los conceptos para timbrar, así que a esas
+  -- facturas les faltan líneas en la extracción de cfdis (no se pueden recuperar, no hay
+  -- fuente mejor). Confirmado con una fuente independiente (proan_MSEG_HIDROCARBUROS,
+  -- SAP): su importe de recepción reconcilia con SubTotal (mediana ratio 1.0) en el 100% de
+  -- los casos, mixtos o no -- nunca con el importe_gas viejo para los mixtos (20.2x). Se
+  -- resta el importe no-gas confirmado del SubTotal (fuente validada por el SAT) en vez de
+  -- sumar las líneas de gas que veamos -- funciona aunque falten líneas de gas en cfdis, y
+  -- sigue siendo correcto si algún día aparece una factura genuinamente mixta.
   ANY_VALUE(c.SubTotal) - SUM(IF(NOT c.es_linea_gas, c.Importe, 0)) AS importe_gas,
+  -- es_mixta ya NO compara SubTotal contra importe_gas (eso es lo que estaba mal:
+  -- comparar el SubTotal bueno contra el importe_gas roto siempre parecía "mixta").
+  -- Ahora es directamente "¿hay una línea real marcada como no-gas?" -- con los datos
+  -- de hoy, 0 facturas la tienen (las 414 "mixtas" del hallazgo de Fase 1 §16 eran este
+  -- mismo bug, no mezcla real de producto).
   COUNTIF(NOT c.es_linea_gas) > 0 AS es_mixta,
   COUNTIF(c.es_linea_gas) AS n_lineas_gas,
   COUNT(*) AS n_lineas_total,

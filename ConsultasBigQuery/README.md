@@ -245,34 +245,31 @@ colas de `apps/frontend` (Compras, Gerencia, Historial) — `sin_sugerencia`
 filtra `ceco_sugerido IS NULL` sin importar si hay o no evidencia MSEG, así
 aísla exactamente estos casos sin ambigüedad.
 
-**Estado de la rama `Fer` (ago-2026) — nada de esto está en producción
-todavía.** Todo lo anterior desde "Fuente de M1" vive en la rama de git
-`Fer`, probado end-to-end en local contra tablas de prueba, NO contra las
-tablas reales que lee producción:
+**Ejecutado contra producción (sep-2026).** Todo lo anterior desde "Fuente de
+M1" (rama `Fer`) se ejecutó contra las tablas reales
+`HCARB_GOLD_CLASIFICACION_FOLIO`/`HCARB_GOLD_VALIDACION_SAP`, con snapshot de
+seguridad previo (`bq cp` a `*_bak_20260903`) por si hiciera falta revertir.
+Cifras medidas en BigQuery real, antes → después:
 
-- `ConsultasBigQuery/HCARB_gold_clasificacion.sql` y
-  `HCARB_gold_validacion_sap.sql` ya tienen el cambio de fuente/lógica
-  descrito arriba, pero **no se han vuelto a ejecutar contra las tablas
-  reales** `HCARB_GOLD_CLASIFICACION_FOLIO`/`HCARB_GOLD_VALIDACION_SAP` (esas
-  tablas siguen siendo las de julio, sobre `cfdis`).
-- `HCARB_gold_clasificacion_fer.sql` y `HCARB_gold_validacion_sap_fer.sql`
-  son copias temporales que escriben en `HCARB_GOLD_CLASIFICACION_FOLIO_fer`
-  y `HCARB_GOLD_VALIDACION_SAP_fer` (mismo dataset `D60_REPORTING`) — solo
-  para poder comparar sin tocar producción. Borrar los 2 `.sql` `_fer` y las
-  2 tablas `_fer` cuando el cambio se confirme y se aplique a las tablas
-  reales (ejecutando los `.sql` sin sufijo).
-- El backend local (`apps/financialbi`) apunta a las tablas `_fer` vía
-  `HCARB_FOLIO_TABLE`/`HCARB_SAP_TABLE` en `config/financialbi.env`
-  (`apps/financialbi/financialbi/hidrocarburos_engine.py`) — variables que
-  solo existen en desarrollo (`config/financialbi.env` no lo usa Cloud Run),
-  así que producción nunca se entera. Quitar esas 2 líneas del `.env` para
-  volver a las tablas reales en local.
-- Pendiente antes de mergear a `main`: decidir si aplicar el cambio también a
-  la copia de `Airflow/D60_REPORTING/` (ya iba desincronizada de
-  `ConsultasBigQuery/` en varios fixes anteriores, ver comentario en
-  `README.md` raíz), y ejecutar los `.sql` reales contra
-  `HCARB_GOLD_CLASIFICACION_FOLIO`/`HCARB_GOLD_VALIDACION_SAP` (afecta a
-  producción, requiere confirmación explícita antes de correrlo).
+- `HCARB_GOLD_CLASIFICACION_FOLIO`: 641 → 650 facturas, 641 → 9.890 líneas
+  totales (confirma el desglose real por `concepto_idx`, antes 1 línea/factura
+  siempre), 0 → 9 mixtas.
+- `HCARB_GOLD_VALIDACION_SAP`: 641 → 650 facturas, `confianza_mseg='Alta'`
+  445 → **497**, `'Media'` 51 → 9, `ceco_sugerido_origen='ticket'` 0 → **284**
+  (38 `'proveedor'`, 11 `'documento'`, 157 `'documento_multiple'`, 160 sin
+  sugerencia) — coincide con las cifras que Fernando había medido contra la
+  tabla de prueba.
+- `Airflow/D60_REPORTING/HCARB_gold_clasificacion.sql` y
+  `HCARB_gold_validacion_sap.sql` quedaron sincronizados con estos mismos
+  archivos (eran una copia desincronizada de antes de la migración a
+  `cfdi_completo`; sin templating propio de Airflow, la copia es literal).
+- `HCARB_dim_nucleo_draft` se promovió a `HCARB_dim_nucleo` (92 filas, 57
+  `confirmado`, 35 `pendiente_confirmar` — no bloquean, caen en "Sin núcleo
+  asignado").
+- Pendiente solo la limpieza de artefactos de prueba (los 2 `.sql` `_fer`,
+  las tablas `_fer`/`_draft`/`_bak` en BigQuery, y las 4 líneas
+  `HCARB_*_TABLE=` de `config/financialbi.env`) — se deja para después de
+  verificar el despliegue en producción, a propósito, como red de seguridad.
 
 ## Datasets (reutilizados, ninguno nuevo)
 

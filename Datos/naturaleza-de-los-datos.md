@@ -106,22 +106,31 @@ proveedor (`BSAK`/`BSIK`) traen el campo `KOSTL` pero vacío. Es un límite de
 
 Lo que sí existe es el `KOSTL` que trae el propio documento de recepción MSEG
 que casó con la factura — el mismo documento que da la evidencia de
-recepción física. De ahí salen dos reglas de sugerencia, nunca bloqueantes:
+recepción física. De ahí salen tres reglas de sugerencia, nunca bloqueantes,
+en orden de prioridad (la primera que aplica gana):
 
-1. **Por proveedor**: si un proveedor concentra casi todo su historial de
-   entregas en un único centro de costo (≥95%), se le sugiere ese centro a
-   *todas* sus facturas, aunque esta factura en concreto no haya casado
-   ningún documento.
-2. **Por documento**: si no aplica la regla anterior, se usan los `KOSTL` del
-   documento MSEG que casó con esta factura — si ese documento reparte el
-   gasto entre varios centros de costo (la misma razón por la que a veces la
-   confianza MSEG es Media, no Alta), no hay ninguna pista adicional para
+1. **Por ticket**: `NoIdentificacion` en cada línea del CFDI es el
+   ticket/remito de entrega — si todos los tickets de gas de la factura (uno
+   o varios) casan por importe, exacto, contra su propia línea (ZEILE) del
+   documento MSEG, cada ZEILE trae su propio `KOSTL`. Es la evidencia más
+   precisa de las tres porque corrobora *esta* entrega en concreto, línea a
+   línea, en vez de un patrón histórico o un reparto agregado sin desglose.
+2. **Por proveedor**: si no hay desglose por ticket completo, y el proveedor
+   concentra casi todo su historial de entregas en un único centro de costo
+   (≥95%), se le sugiere ese centro a *todas* sus facturas, aunque esta
+   factura en concreto no haya casado ningún documento.
+3. **Por documento**: si no aplica ninguna de las dos anteriores, se usan los
+   `KOSTL` del documento MSEG completo que casó con esta factura — si ese
+   documento reparte el gasto entre varios centros de costo sin que el
+   desglose por ticket lo pueda resolver (la misma razón por la que a veces
+   la confianza MSEG es Media, no Alta), no hay ninguna pista adicional para
    elegir uno solo, así que se muestran todos para que Compras decida.
 
-Por eso, para una parte importante de las facturas con sugerencia, el
-resultado no es un único CECO sino varias opciones: es el mismo reparto físico
-de la entrega entre destinos que limita la confianza MSEG a "Media", visto
-desde el ángulo del centro de costo en vez del importe.
+Por eso, para una parte importante de las facturas con sugerencia (sobre todo
+cuando gana la regla 3), el resultado no es un único CECO sino varias
+opciones: es el mismo reparto físico de la entrega entre destinos que limita
+la confianza MSEG a "Media", visto desde el ángulo del centro de costo en vez
+del importe.
 
 ## Sitio de consumo y cobertura SAP: el mismo principio, aplicado a otros cruces
 

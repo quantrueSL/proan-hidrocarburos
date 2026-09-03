@@ -19,7 +19,7 @@ Orden de los 9 commits de Fernando (oldest→newest), más el nuestro (10):
 10. `9a1eb42` — CECO por ticket en Módulo 3: captura, reparto en dashboard, 2
     fixes de concurrencia (2026-09-02, no es de Fernando — ver sección propia
     más abajo)
-11. Sin commit todavía — Dimensión "Núcleo" en el Dashboard (2026-09-03, no es
+11. `579da63` — Dimensión "Núcleo" en Dashboard y Módulo 3 (2026-09-03, no es
     de Fernando — ver sección propia más abajo)
 
 ---
@@ -415,42 +415,36 @@ con la sección "Estado de la rama `Fer`" (ver siguiente apartado).
 
 ## Qué falta para pasar todo esto a producción
 
-Según la propia sección "Estado de la rama `Fer`" del README, checklist en
-orden:
+**Actualizado 2026-09-03 — progreso del despliegue a producción:**
 
-1. **Ejecutar los `.sql` reales contra las tablas de producción** (afecta
-   producción, requiere confirmación explícita antes de correrlo):
-   - `ConsultasBigQuery/HCARB_gold_clasificacion.sql` → sobreescribe
-     `HCARB_GOLD_CLASIFICACION_FOLIO`.
-   - `ConsultasBigQuery/HCARB_gold_validacion_sap.sql` → sobreescribe
-     `HCARB_GOLD_VALIDACION_SAP`.
-   - Ambos ya tienen el cambio de fuente/lógica en el código SQL, pero **no se
-     han vuelto a ejecutar** contra las tablas reales — esas tablas siguen
-     siendo las de julio, sobre `cfdis` (la fuente vieja).
-2. **Decidir sobre `Airflow/D60_REPORTING/`** — es una copia paralela de estas
-   queries que ya iba desincronizada de `ConsultasBigQuery/` en fixes
-   anteriores (ver comentario en el `README.md` raíz del repo). Hay que
-   decidir si el cambio se replica ahí también antes de mergear.
-3. **Borrar los artefactos temporales de prueba** una vez confirmado el
-   cambio en producción:
+1. ✅ **Ejecutar los `.sql` reales contra las tablas de producción** — hecho,
+   con snapshot de seguridad previo (`bq cp` a `*_bak_20260903`):
+   - `HCARB_GOLD_CLASIFICACION_FOLIO`: 641→650 facturas, 641→9.890 líneas
+     totales, 0→9 mixtas.
+   - `HCARB_GOLD_VALIDACION_SAP`: 641→650 facturas, `Alta` 445→497,
+     `ceco_sugerido_origen='ticket'` 0→284 — coincide con las cifras medidas
+     por Fernando contra la tabla de prueba. Detalle en
+     [`ConsultasBigQuery/README.md`](ConsultasBigQuery/README.md).
+2. ✅ **`Airflow/D60_REPORTING/`** — sincronizado (copia literal, sin
+   templating propio que perder).
+3. ✅ **`HCARB_dim_nucleo_draft` promovida** a `HCARB_dim_nucleo` (92 filas,
+   57 `confirmado`, 35 `pendiente_confirmar` sin bloquear nada).
+4. ⏳ **Borrar los artefactos temporales de prueba** — deliberadamente
+   pospuesto hasta después de desplegar y verificar producción (decisión
+   tomada en esta sesión: dejarlos de red de seguridad mientras se confirma
+   que todo funciona). Sigue pendiente:
    - `ConsultasBigQuery/HCARB_gold_clasificacion_fer.sql` y
      `HCARB_gold_validacion_sap_fer.sql` (los `.sql` `_fer`).
-   - Las tablas `HCARB_GOLD_CLASIFICACION_FOLIO_fer`,
-     `HCARB_GOLD_VALIDACION_SAP_fer` y `HCARB_gold_aprobacion_fer` (esta
-     última añadida hoy, ver sección "CECO por ticket/línea" más abajo) en
-     BigQuery.
-   - `HCARB_dim_nucleo_draft` (secc. 11) es un caso distinto: no se borra, se
-     **promueve** (rename/CREATE OR REPLACE a `HCARB_dim_nucleo` sin sufijo)
-     una vez se reduzcan los 35 `pendiente_confirmar` -- ver el checklist
-     propio de esa sección.
+   - Tablas en BigQuery: `HCARB_GOLD_CLASIFICACION_FOLIO_fer`,
+     `HCARB_GOLD_VALIDACION_SAP_fer`, `HCARB_gold_aprobacion_fer`, y los
+     backups `*_bak_20260903` de este despliegue.
    - Las 4 líneas `HCARB_FOLIO_TABLE=`/`HCARB_SAP_TABLE=`/
      `HCARB_APROBACION_TABLE=`/`HCARB_NUCLEO_TABLE=` en
-     `config/financialbi.env` (para que el backend local vuelva a leer las
-     tablas reales).
-4. **Mergear la rama `Fer` a `main`** una vez hecho lo anterior.
+     `config/financialbi.env`.
+5. ⏳ **Mergear la rama `Fer` a `main` y desplegar** — siguiente paso.
 
-Nada de esto se ha aplicado todavía — todo lo probado corre en local contra
-las tablas `_fer`, sin tocar lo que lee producción hoy.
+Plan completo de esta sesión (fases, verificaciones, decisiones tomadas):
+`C:\Users\Pablo Coma\.claude\plans\concurrent-forging-ember.md`.
 
 ---
 
@@ -618,7 +612,7 @@ Orden correcto:
 
 ---
 
-## 11. Sin commit todavía — Dimensión "Núcleo" en el Dashboard (2026-09-03, no es de Fernando)
+## 11. `579da63` — Dimensión "Núcleo" en Dashboard y Módulo 3 (2026-09-03, no es de Fernando)
 
 Aparte de los 9 commits de Fernando, Methagas compartió una propuesta en Excel
 ("Propuesta de relación de núcleos e instalaciones asociadas PROAN.xlsx", raíz
@@ -696,8 +690,9 @@ contra BigQuery real que el conteo coincide exacto con `_gasto_por_nucleo`
 `/v1/financialbi/hidrocarburos/dashboard` devuelve `gasto_por_nucleo` idéntico
 a la consulta directa; filtrar por un núcleo real y por `__SIN_NUCLEO__` en el
 drill-down (`detalle=true`) devuelve exactamente los totales esperados (32 y
-182). Frontend compila sin errores (`Compiled /dashboard in 1103ms`). Falta
-confirmación visual en el navegador (fuera del alcance de este entorno).
+182). Frontend compila sin errores (`Compiled /dashboard in 1103ms`).
+Confirmado visualmente en el navegador por el usuario: el gráfico aparece
+correctamente.
 
 ### Extensión: Núcleo también en Módulo 3 (Cola de Compras/Gerencia/Historial)
 
@@ -722,7 +717,7 @@ factura y no el núcleo al que pertenece.
 **Verificado**: endpoint `catalogo/nucleo` devuelve 57 filas reales; `/compras`
 y `/aprobacion` compilan sin errores (892ms/740 módulos y 851ms/703 módulos).
 
-### Cómo pasar esto a producción
+### Cómo pasar el commit `579da63` a producción
 
 Además del checklist general (punto 1, `.sql` reales) y de que el commit se
 despliegue con el resto del código:
