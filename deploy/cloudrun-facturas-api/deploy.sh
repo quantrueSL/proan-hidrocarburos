@@ -12,7 +12,7 @@ set -euo pipefail
 
 PROJECT="proan-quantrue"
 REGION="us-west4"
-SERVICE="facturas-api"
+SERVICE="plataforma-hidrocarburos-api"
 REPO="${REGION}-docker.pkg.dev/${PROJECT}/cloud-run-source-deploy"
 SERVICE_ACCOUNT="272166156031-compute@developer.gserviceaccount.com"
 

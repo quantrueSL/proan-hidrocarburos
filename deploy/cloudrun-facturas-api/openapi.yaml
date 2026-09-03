@@ -1,0 +1,119 @@
+# Spec OpenAPI 2.0 (Swagger) para API Gateway -- describe las rutas de
+# facturas-api y hacia dónde reenviarlas (x-google-backend). API Gateway solo
+# entiende OpenAPI 2.0, no 3.x.
+#
+# `address` se actualiza cada vez que se despliega una revisión nueva de
+# Cloud Run bajo el mismo nombre de servicio -- la URL en sí no cambia entre
+# despliegues (es la URL del SERVICIO, no de una revisión concreta), así que
+# este archivo no hace falta tocarlo en cada deploy.sh de facturas-api.
+swagger: "2.0"
+info:
+  title: plataforma-hidrocarburos-facturas-api
+  description: XML y PDF de las facturas de gas ya clasificadas en Hidrocarburos.
+  version: "1.0.0"
+schemes:
+  - https
+produces:
+  - application/json
+
+securityDefinitions:
+  api_key:
+    type: apiKey
+    name: x-api-key
+    in: header
+
+security:
+  - api_key: []
+
+x-google-backend:
+  address: https://plataforma-hidrocarburos-api-272166156031.us-west4.run.app
+
+paths:
+  /health:
+    get:
+      summary: Estado del servicio
+      operationId: health
+      responses:
+        "200":
+          description: OK
+
+  /v1/facturas:
+    get:
+      summary: Buscar facturas por RFC emisor / Serie / Folio / rango de fecha
+      operationId: buscarFacturas
+      parameters:
+        - name: rfc_emisor
+          in: query
+          type: string
+        - name: serie
+          in: query
+          type: string
+        - name: folio
+          in: query
+          type: string
+        - name: fecha_desde
+          in: query
+          type: string
+          format: date
+        - name: fecha_hasta
+          in: query
+          type: string
+          format: date
+      responses:
+        "200":
+          description: Lista de facturas coincidentes (puede ser vacía)
+        "400":
+          description: parametros_invalidos
+
+  /v1/facturas/{uuid}:
+    get:
+      summary: Metadata de una factura de gas
+      operationId: obtenerFactura
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: factura_no_encontrada
+
+  /v1/facturas/{uuid}/xml:
+    get:
+      summary: XML del CFDI reconstruido
+      operationId: obtenerXml
+      produces:
+        - application/xml
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: factura_no_encontrada
+        "503":
+          description: generacion_no_disponible
+
+  /v1/facturas/{uuid}/pdf:
+    get:
+      summary: Representación impresa (PDF) del CFDI
+      operationId: obtenerPdf
+      produces:
+        - application/pdf
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: factura_no_encontrada
+        "503":
+          description: generacion_no_disponible
