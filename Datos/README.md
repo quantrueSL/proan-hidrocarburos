@@ -9,9 +9,10 @@ el historial de git si algún día hace falta reconstruir el porqué de una
 decisión concreta.
 
 - **[`Propuesta.md`](./Propuesta.md)** — el requerimiento de negocio original
-  (copia de `Primera-iteracion/Propuesta.md`): los 4 módulos, las claves SAT de
-  gas, los indicadores del dashboard. Es el documento de referencia para saber
-  *qué* se pidió.
+  (copia de la primera iteración de este proyecto, carpeta local nunca
+  versionada y ya borrada): los 4 módulos, las claves SAT de gas, los
+  indicadores del dashboard. Es el documento de referencia para saber *qué*
+  se pidió.
 - **[`naturaleza-de-los-datos.md`](./naturaleza-de-los-datos.md)** — *por qué*
   el cruce entre las facturas (CFDI) y los registros de SAP (MSEG, BKPF,
   BSAK/BSIK, EKBE) nunca es exacto al 100%, y qué significa cada nivel de

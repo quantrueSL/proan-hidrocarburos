@@ -281,8 +281,9 @@ mseg_scored AS (
     ON m.proveedor_key = f.proveedor_key
     AND ABS(DATE_DIFF(DATE(f.fecha), m.fecha_mseg, DAY)) <= 120
 ),
--- Mejor match mutuo (un documento no puede corroborar 2 facturas ni viceversa), igual que
--- best_match en Primera-iteracion/hidrocarburos.sql. confianza_mseg='Alta' solo si folio Y
+-- Mejor match mutuo (un documento no puede corroborar 2 facturas ni viceversa), patrón
+-- heredado de la primera iteración de este proyecto (carpeta local, nunca versionada).
+-- confianza_mseg='Alta' solo si folio Y
 -- importe casan exacto (recepción 1:1 verificable); 'Media' si solo el folio casa -- el
 -- importe de MSEG en esos casos suele ser mayor al de la factura (recepción consolidada de
 -- varias entregas/facturas bajo un mismo documento), así que confirma "hubo recepción" pero
