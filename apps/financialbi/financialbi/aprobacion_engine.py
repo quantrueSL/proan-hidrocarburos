@@ -7,9 +7,8 @@ ConsultasBigQuery/HCARB_gold_aprobacion_schema.sql.
 
 Workflow de dos roles (D23): pendiente_validacion_compras (Compras captura CECO
 y confirma/corrige el sitio) -> pendiente_aprobacion_gerencia (Gerencia
-aprueba/rechaza) -> aprobada | rechazada. Identidad de usuario (D27): texto libre
-por ahora, no viene de un login con roles reales -- auth real queda como deuda
-técnica explícita.
+aprueba/rechaza) -> aprobada | rechazada. La identidad de usuario llega desde
+la sesión firmada del proxy Next.js, no desde el body enviado por el cliente.
 """
 
 from __future__ import annotations
@@ -34,11 +33,9 @@ _APROBACION = f"`{_APROBACION_TABLE}`"
 _CECO_CATALOGO = "`proan-quantrue.D00_SANDBOX.proan_CSKT_20260714`"
 _CENTROS = "`proan-quantrue.D20_DIMENSION.dm_centros`"
 
-# HCARB_NUCLEO_TABLE (mismo patron que HCARB_APROBACION_TABLE): permite
-# apuntar al borrador HCARB_dim_nucleo_draft mientras se confirman los
-# ultimos CeCo/nucleo pendientes, sin depender de un nombre hardcodeado. Sin
-# definir, usa el nombre final HCARB_dim_nucleo (todavia no existe -- se crea
-# cuando se promueva el borrador).
+# HCARB_NUCLEO_TABLE sigue el mismo patrón que HCARB_APROBACION_TABLE: permite
+# apuntar a una tabla alternativa sin cambiar código. Sin definir, usa el
+# catálogo de producción HCARB_dim_nucleo.
 _NUCLEO_TABLE = os.getenv("HCARB_NUCLEO_TABLE", "proan-quantrue.D60_REPORTING.HCARB_dim_nucleo")
 _NUCLEO = f"`{_NUCLEO_TABLE}`"
 
@@ -359,14 +356,16 @@ def catalogo_nucleo() -> list[dict[str, Any]]:
     """Sugerencia de solo lectura (no bloqueante, sin <datalist> -- a diferencia
     de catalogo_ceco()/catalogo_sitios() esto no se captura a mano, solo se
     muestra junto al CECO ya asignado/sugerido). Cruce Nucleo<->CeCo
-    (dim_nucleo_draft, propuesta Methagas x catalogo real de SAP, ver
-    HALLAZGOS-FER.md secc. 11) -- {id: KOSTL, nombre: nucleo} para reusar el
-    mismo shape/Map que ya arma el frontend para CECO. Solo estado='confirmado'
-    (los 35 pendiente_confirmar todavia no resuelven a un nucleo real)."""
+    (propuesta Methagas x catalogo real de SAP, ver
+    docs/data/nucleos-y-conciliacion.md) -- {id: KOSTL, nombre: nucleo} para reusar el
+    mismo shape/Map que ya arma el frontend para CECO. Solo expone KOSTL
+    identificados cuya asignacion Methagas al nucleo esta confirmada; ambos
+    estados se mantienen separados en la tabla."""
     query = f"""
       SELECT ceco AS id, nucleo AS nombre
       FROM {_NUCLEO}
-      WHERE estado = 'confirmado'
+      WHERE estado_identificacion_ceco = 'confirmado'
+        AND estado_asignacion_nucleo = 'confirmada'
       ORDER BY nucleo
     """
     return _rows(query)

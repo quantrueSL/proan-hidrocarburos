@@ -34,10 +34,10 @@ class QueryConcurrencyTests(unittest.TestCase):
             result = aprobacion_engine._paginar_cola("FROM example", [], "uuid", 1, 50)
 
         self.assertEqual(result["total"], 1)
-        self.assertEqual(result["rows"], [{"uuid": "invoice-1"}])
+        self.assertEqual(result["rows"], [{"uuid": "invoice-1", "ceco_por_ticket": None}])
 
     def test_dashboard_blocks_run_concurrently(self) -> None:
-        barrier = threading.Barrier(5)
+        barrier = threading.Barrier(6)
 
         def result(value: object):
             def run(_where: str, _params: list[object]) -> object:
@@ -50,11 +50,13 @@ class QueryConcurrencyTests(unittest.TestCase):
             patch.object(dashboard_engine, "_gasto_por_proveedor", side_effect=result([{"grupo": "A"}])),
             patch.object(dashboard_engine, "_gasto_por_sitio", side_effect=result([{"grupo": "B"}])),
             patch.object(dashboard_engine, "_gasto_por_ceco", side_effect=result([{"grupo": "C"}])),
+            patch.object(dashboard_engine, "_gasto_por_nucleo", side_effect=result([{"grupo": "N"}])),
             patch.object(dashboard_engine, "_gasto_por_periodo", side_effect=result([{"grupo": "2026-07"}])),
         ):
             result_payload = dashboard_engine.resumen_completo()
 
         self.assertEqual(result_payload["resumen"]["total_facturas"], 1)
+        self.assertEqual(result_payload["gasto_por_nucleo"][0]["grupo"], "N")
         self.assertEqual(result_payload["gasto_por_periodo"][0]["grupo"], "2026-07")
 
     def test_dashboard_volume_is_normalized_to_liters(self) -> None:
@@ -85,13 +87,39 @@ class QueryConcurrencyTests(unittest.TestCase):
         self.assertIn("@estado_aprobacion", where)
         self.assertEqual([param.name for param in params], ["periodo", "sitio", "estado_aprobacion"])
 
+        nucleo_where, nucleo_params = dashboard_engine._construir_filtro(
+            None, None, None, None, None, None, nucleo="Reproducción de Aves"
+        )
+        self.assertIn("nuc.nucleo = @nucleo", nucleo_where)
+        self.assertEqual([param.name for param in nucleo_params], ["nucleo"])
+
+        sin_nucleo_where, sin_nucleo_params = dashboard_engine._construir_filtro(
+            None, None, None, None, None, None, nucleo="__SIN_NUCLEO__"
+        )
+        self.assertIn("estado_identificacion_ceco = 'confirmado'", sin_nucleo_where)
+        self.assertIn("estado_asignacion_nucleo = 'confirmada'", sin_nucleo_where)
+        self.assertIn("a.ceco_por_ticket IS NULL", sin_nucleo_where)
+        self.assertIn("a.ceco_por_ticket IS NOT NULL", sin_nucleo_where)
+        self.assertEqual(sin_nucleo_params, [])
+
+    def test_nucleo_catalog_only_reads_confirmed_rows(self) -> None:
+        with patch.object(aprobacion_engine, "_rows", return_value=[]) as rows:
+            aprobacion_engine.catalogo_nucleo()
+
+        self.assertIn("WHERE estado_identificacion_ceco = 'confirmado'", rows.call_args.args[0])
+        self.assertIn("estado_asignacion_nucleo = 'confirmada'", rows.call_args.args[0])
+
     def test_dashboard_detail_removes_internal_total(self) -> None:
         row = {"_total": 3, "uuid": "invoice-1"}
-        with patch.object(dashboard_engine, "_rows", return_value=[row]):
+        with patch.object(dashboard_engine, "_rows", return_value=[row]) as rows:
             result = dashboard_engine.facturas_detalle()
 
         self.assertEqual(result["total"], 3)
         self.assertEqual(result["rows"], [{"uuid": "invoice-1"}])
+        query = rows.call_args.args[0]
+        self.assertIn("reparto.cecos", query)
+        self.assertIn("reparto.nucleos", query)
+        self.assertIn("reparto.cecos_sin_nucleo", query)
 
     def test_text_search_is_parameterized(self) -> None:
         where, params = hidrocarburos_engine._filters(busqueda=" GCRE13556 ")

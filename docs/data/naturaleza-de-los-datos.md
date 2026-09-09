@@ -36,27 +36,32 @@ referencia (`XBLNR`) — y un folio puede repetirse entre ejercicios fiscales,
 así que cualquier cruce por folio necesita también una ventana de fecha para
 no colar coincidencias falsas.
 
-## `cfdis`: grano línea de concepto, con un problema de extracción real
+## Líneas CFDI: grano concepto y cambio de fuente
 
 Cada factura puede traer una o varias líneas de concepto (`ClaveProdServ`,
-`Cantidad`, `Importe`...). El "importe de gas" de una factura se calcula
-sumando las líneas que corresponden a gas (`151115xx` o `83101600/01`).
+`Cantidad`, `Importe`...). Conceptualmente, el importe de gas corresponde a
+las líneas clasificadas como gas (`151115xx` o `83101600/01`); la fórmula de
+producción se apoya en `SubTotal` para ser robusta ante extracciones
+incompletas.
 
-Esto asume que **todas** las líneas reales de la factura están en `cfdis`. No
-siempre es así: para una parte significativa de las facturas (~76% en el
-snapshot de jul-2026), `cfdis` solo trae **una** línea de gas, internamente
+La fuente antigua `D00_SANDBOX.cfdis` no contenía siempre todas las líneas:
+para una parte significativa de las facturas (~76% en el snapshot de
+jul-2026), solo traía **una** línea de gas, internamente
 coherente (`Cantidad × ValorUnitario = Importe`), pero el `SubTotal` de
 cabecera es varias veces mayor que esa única línea — algo que el SAT no
 permitiría timbrar si esa fuera de verdad la única línea del CFDI (`SubTotal`
 tiene que ser la suma de **todos** los conceptos). La conclusión casi
-obligada: a esas facturas les faltan líneas en la extracción de `cfdis`. No es
-algo que se pueda arreglar desde esta capa — no hay una fuente más completa
-disponible —, pero sí se puede evitar que ese hueco distorsione el resultado:
-**`SubTotal` (validado por el SAT) es más fiable que la suma de las líneas que
-tengamos**, así que el importe de gas se calcula como `SubTotal` menos las
-líneas que sí confirmamos que no son de gas, no como la suma de las líneas de
-gas que veamos. Confirmado de forma independiente: el importe de recepción de
-MSEG reconcilia con `SubTotal`, nunca con la suma incompleta de líneas.
+obligada era que a esas facturas les faltaban líneas en aquella extracción.
+Mientras esa era la única fuente disponible, el cálculo evitó que el hueco
+distorsionara el resultado:
+**`SubTotal` (validado por el SAT) es más fiable que la suma de una extracción
+incompleta**, así que el importe de gas se calcula como `SubTotal` menos las
+líneas confirmadas como no gas.
+
+Desde ago-2026 la fuente viva es `D30_INTEGRATION.cfdi_completo`, con el
+desglose real por `concepto_idx`. Esto permite auditar todas las líneas y
+habilita el cruce por ticket. Se conserva la fórmula robusta basada en
+`SubTotal`, aunque el defecto descrito corresponda a la fuente antigua.
 
 ## MSEG: grano documento de recepción física, no factura
 
@@ -75,10 +80,13 @@ cabecera (`XBLNR_MKPF`) es único por documento, pero el **importe total** del
 documento no tiene por qué coincidir con el de una sola factura — puede ser
 varias veces mayor si agrupa más de una entrega.
 
-Esto es exactamente lo que separa la confianza **Alta** de la **Media**:
+El documento agregado es el primer criterio que separa la confianza **Alta**
+de la **Media**:
 
-- **Alta**: el documento tiene una única línea (o el total coincide al
-  centavo con la factura) — recepción verificable 1 a 1.
+- **Alta**: el folio y el importe del documento son compatibles, o bien todos
+  los tickets de gas de la factura casan contra sus líneas ZEILE. Este segundo
+  caso permite confirmar la factura aunque el documento completo consolide
+  otras entregas.
 - **Media**: el folio coincide, pero el documento reparte el importe entre
   varias líneas/centros de costo — hay evidencia de que el gas llegó, sin
   poder aislar el monto exacto de esta factura en particular.
@@ -90,9 +98,9 @@ físico que el de una sola entrega.
 
 Ojo con el ruido de redondeo: comparar importes a 2 decimales exactos es
 más estricto de lo que tiene sentido cuando dos sistemas distintos suman
-números en pesos por caminos distintos — de ahí la tolerancia de **$0.20
-MXN** (no dólares; todos los importes de este cruce están en pesos) al
-comparar `doc_importe` (MSEG) contra el importe de la factura.
+números en pesos por caminos distintos — de ahí la tolerancia de **$0.20 MXN
+o el 0,03% del importe, lo que resulte mayor** (no dólares; todos los importes
+de este cruce están en pesos) al comparar MSEG contra la factura o el ticket.
 
 ## El CECO: por qué no hay un dato exacto y por qué a veces salen varios
 

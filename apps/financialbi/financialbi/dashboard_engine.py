@@ -10,7 +10,7 @@ B. Análisis de gasto: por proveedor, por sitio, por CECO (con nombre resuelto
    vía catálogo SAP), y acumulado por periodo (mensual).
 
 Filtros (jul-2026): fecha_desde/fecha_hasta + proveedor_id/estado_sap/
-confianza_mseg/estatus_sat acotan las 5 queries a la vez (mismo WHERE
+confianza_mseg/estatus_sat acotan las 6 queries a la vez (mismo WHERE
 compartido), vía el panel de filtros lateral (igual criterio que M2/M3).
 
 No se desglosa por "sociedad" (Propuesta original) porque el alcance actual
@@ -57,7 +57,7 @@ def _construir_filtro(
 ) -> tuple[str, list[bigquery.ScalarQueryParameter]]:
     # f siempre disponible (tabla base); s (_SAP) y e (_ESTATUS_SAT) deben estar
     # JOINeados en TODAS las sub-queries para que este WHERE compartido resuelva
-    # sin importar cuál de los 5 bloques lo use -- ver joins añadidos abajo.
+    # sin importar cuál de los 6 bloques lo use -- ver joins añadidos abajo.
     clauses = ["TRUE"]
     params: list[bigquery.ScalarQueryParameter] = []
     if fecha_desde:
@@ -118,8 +118,9 @@ def _construir_filtro(
         params.append(bigquery.ScalarQueryParameter("estado_aprobacion", "STRING", estado_aprobacion))
     if nucleo == "__SIN_NUCLEO__":
         # Ninguno de los CeCo de esta factura (el legado o los confirmados por
-        # ticket) aparece en el cruce Nucleo<->CeCo (dim_nucleo_draft, solo
-        # filas estado='confirmado') -- mismo criterio que usa _gasto_por_nucleo
+        # ticket) aparece en el cruce Nucleo<->CeCo (solo KOSTL identificados
+        # cuya asignacion Methagas esta confirmada) -- mismo criterio que usa
+        # _gasto_por_nucleo
         # para el bucket 'Sin núcleo asignado': excluye explícitamente las
         # facturas sin CeCo o con varios CeCo sin confirmar (esas ya tienen su
         # propio bucket -- __SIN_CECO__/__VARIOS_CECO__, ver filtro ceco=).
@@ -128,26 +129,44 @@ def _construir_filtro(
         # reference other tables are not supported..." -- verificado en vivo);
         # por eso se usa IN + JOIN dentro del EXISTS en vez de EXISTS anidado.
         clauses.append(f"""(
-          COALESCE(a.ceco, s.ceco_sugerido) IS NOT NULL
-          AND STRPOS(COALESCE(a.ceco, s.ceco_sugerido), ',') = 0
-          AND COALESCE(a.ceco, s.ceco_sugerido) NOT IN (
-            SELECT ceco FROM {_NUCLEO} WHERE estado = 'confirmado'
+          (
+            a.ceco_por_ticket IS NULL
+            AND COALESCE(a.ceco, s.ceco_sugerido) IS NOT NULL
+            AND STRPOS(COALESCE(a.ceco, s.ceco_sugerido), ',') = 0
+            AND COALESCE(a.ceco, s.ceco_sugerido) NOT IN (
+              SELECT ceco FROM {_NUCLEO}
+              WHERE estado_identificacion_ceco = 'confirmado'
+                AND estado_asignacion_nucleo = 'confirmada'
+            )
           )
-          AND NOT EXISTS (
-            SELECT 1 FROM UNNEST(JSON_EXTRACT_ARRAY(a.ceco_por_ticket)) AS tj
-            JOIN {_NUCLEO} nuc ON nuc.ceco = JSON_VALUE(tj, '$.ceco')
-            WHERE nuc.estado = 'confirmado'
+          OR (
+            a.ceco_por_ticket IS NOT NULL
+            AND EXISTS (
+              SELECT 1 FROM UNNEST(JSON_EXTRACT_ARRAY(a.ceco_por_ticket)) AS tj
+              WHERE JSON_VALUE(tj, '$.ceco') IS NOT NULL
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM UNNEST(JSON_EXTRACT_ARRAY(a.ceco_por_ticket)) AS tj
+              JOIN {_NUCLEO} nuc ON nuc.ceco = JSON_VALUE(tj, '$.ceco')
+              WHERE nuc.estado_identificacion_ceco = 'confirmado'
+                AND nuc.estado_asignacion_nucleo = 'confirmada'
+            )
           )
         )""")
     elif nucleo:
         clauses.append(f"""(
           COALESCE(a.ceco, s.ceco_sugerido) IN (
-            SELECT ceco FROM {_NUCLEO} WHERE estado = 'confirmado' AND nucleo = @nucleo
+            SELECT ceco FROM {_NUCLEO}
+            WHERE estado_identificacion_ceco = 'confirmado'
+              AND estado_asignacion_nucleo = 'confirmada'
+              AND nucleo = @nucleo
           )
           OR EXISTS (
             SELECT 1 FROM UNNEST(JSON_EXTRACT_ARRAY(a.ceco_por_ticket)) AS tj
             JOIN {_NUCLEO} nuc ON nuc.ceco = JSON_VALUE(tj, '$.ceco')
-            WHERE nuc.estado = 'confirmado' AND nuc.nucleo = @nucleo
+            WHERE nuc.estado_identificacion_ceco = 'confirmado'
+              AND nuc.estado_asignacion_nucleo = 'confirmada'
+              AND nuc.nucleo = @nucleo
           )
         )""")
         params.append(bigquery.ScalarQueryParameter("nucleo", "STRING", nucleo))
@@ -318,8 +337,8 @@ def _gasto_por_nucleo(where: str, params: list[bigquery.ScalarQueryParameter]) -
     propuesta Methagas de agrupar instalaciones para el umbral de consumo,
     cruzada contra el catalogo real de SAP -- ver
     docs/data/naturaleza-de-los-datos.md y ConsultasBigQuery/README.md).
-    Solo cuentan las filas estado='confirmado' del cruce -- todavia hay CeCo
-    sin resolver (pendiente_confirmar) que no se usan para agrupar.
+    Solo cuentan KOSTL identificados cuya asignacion Methagas al nucleo esta
+    confirmada; los dos estados son independientes en HCARB_dim_nucleo.
 
     La mayoria de facturas no tienen ningun CeCo dentro del alcance del
     Excel de nucleos (son CeCo de mantenimiento/administrativos, o el nucleo
@@ -368,7 +387,10 @@ def _gasto_por_nucleo(where: str, params: list[bigquery.ScalarQueryParameter]) -
         LEFT JOIN {_ESTATUS_SAT} e ON f.uuid = e.uuid
         WHERE {where} AND a.ceco_por_ticket IS NULL
       ) x
-      LEFT JOIN {_NUCLEO} nuc ON nuc.ceco = TRIM(x.ceco) AND nuc.estado = 'confirmado'
+      LEFT JOIN {_NUCLEO} nuc
+        ON nuc.ceco = TRIM(x.ceco)
+        AND nuc.estado_identificacion_ceco = 'confirmado'
+        AND nuc.estado_asignacion_nucleo = 'confirmada'
       GROUP BY filtro, grupo
       ORDER BY n_facturas DESC
     """
@@ -474,14 +496,48 @@ def facturas_detalle(
           ELSE 'sin_confirmar'
         END AS estatus_sat,
         COALESCE(a.werks_manual, s.sitio_consumo, 'Sin sitio') AS sitio,
-        COALESCE(a.ceco, s.ceco_sugerido) AS ceco,
-        COALESCE(nuc.nucleo, 'Sin núcleo asignado') AS nucleo
+        CASE
+          WHEN a.ceco_por_ticket IS NOT NULL THEN reparto.cecos
+          ELSE COALESCE(a.ceco, s.ceco_sugerido)
+        END AS ceco,
+        CASE
+          WHEN a.ceco_por_ticket IS NOT NULL AND reparto.cecos IS NULL THEN 'Sin CECO'
+          WHEN a.ceco_por_ticket IS NOT NULL AND reparto.nucleos IS NULL THEN 'Sin núcleo asignado'
+          WHEN a.ceco_por_ticket IS NOT NULL AND reparto.cecos_sin_nucleo IS NOT NULL
+            THEN CONCAT(reparto.nucleos, ' · Sin núcleo: ', reparto.cecos_sin_nucleo)
+          WHEN a.ceco_por_ticket IS NOT NULL THEN reparto.nucleos
+          WHEN COALESCE(a.ceco, s.ceco_sugerido) IS NULL THEN 'Sin CECO'
+          WHEN STRPOS(COALESCE(a.ceco, s.ceco_sugerido), ',') > 0 THEN 'Varios CECO (sin confirmar)'
+          ELSE COALESCE(nuc.nucleo, 'Sin núcleo asignado')
+        END AS nucleo
       FROM {_FOLIO} f
       LEFT JOIN {_VENDORS} v ON f.id_proveedor = v.id_proveedor
       LEFT JOIN {_APROBACION} a ON f.uuid = a.uuid
       LEFT JOIN {_SAP} s ON f.uuid = s.uuid
       LEFT JOIN {_ESTATUS_SAT} e ON f.uuid = e.uuid
-      LEFT JOIN {_NUCLEO} nuc ON nuc.ceco = COALESCE(a.ceco, s.ceco_sugerido) AND nuc.estado = 'confirmado'
+      LEFT JOIN {_NUCLEO} nuc
+        ON nuc.ceco = COALESCE(a.ceco, s.ceco_sugerido)
+        AND nuc.estado_identificacion_ceco = 'confirmado'
+        AND nuc.estado_asignacion_nucleo = 'confirmada'
+      LEFT JOIN (
+        SELECT
+          a_reparto.uuid,
+          STRING_AGG(DISTINCT JSON_VALUE(ticket_json, '$.ceco'), ', ' ORDER BY JSON_VALUE(ticket_json, '$.ceco')) AS cecos,
+          STRING_AGG(DISTINCT nuc_reparto.nucleo, ' · ' ORDER BY nuc_reparto.nucleo) AS nucleos,
+          STRING_AGG(
+            DISTINCT IF(nuc_reparto.nucleo IS NULL, JSON_VALUE(ticket_json, '$.ceco'), NULL),
+            ', ' ORDER BY IF(nuc_reparto.nucleo IS NULL, JSON_VALUE(ticket_json, '$.ceco'), NULL)
+          ) AS cecos_sin_nucleo
+        FROM {_APROBACION} a_reparto
+        CROSS JOIN UNNEST(JSON_EXTRACT_ARRAY(a_reparto.ceco_por_ticket)) AS ticket_json
+        LEFT JOIN {_NUCLEO} nuc_reparto
+          ON nuc_reparto.ceco = JSON_VALUE(ticket_json, '$.ceco')
+          AND nuc_reparto.estado_identificacion_ceco = 'confirmado'
+          AND nuc_reparto.estado_asignacion_nucleo = 'confirmada'
+        WHERE a_reparto.ceco_por_ticket IS NOT NULL
+          AND JSON_VALUE(ticket_json, '$.ceco') IS NOT NULL
+        GROUP BY a_reparto.uuid
+      ) reparto ON reparto.uuid = f.uuid
       WHERE {where}
       ORDER BY DATE(f.fecha) DESC, proveedor, folio
       LIMIT 200

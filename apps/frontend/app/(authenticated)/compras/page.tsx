@@ -28,8 +28,8 @@ export default async function ComprasPage() {
 
   try {
     [compras, historial, cecos, sitios, nucleos, filtrosCatalog] = await Promise.all([
-      getAprobacionCompras(session),
-      getAprobacionHistorial(session),
+      getAprobacionCompras(session, { page_size: 100 }),
+      getAprobacionHistorial(session, { page_size: 100 }),
       getAprobacionCatalogCeco(session),
       getAprobacionCatalogSitios(session),
       getAprobacionCatalogNucleo(session),

@@ -26,7 +26,7 @@ type Props = {
   roles?: Role[];
 };
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 100;
 
 const money = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 });
 const quantity = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 3 });
@@ -100,6 +100,57 @@ function cecoLabel(raw: string | null | undefined, catalogo: Map<string, string>
   };
 }
 
+type AssignmentStatus = { label: string; detail: string; tone: "ok" | "info" | "warn" | "muted" };
+
+function cecoCodes(raw: string | null | undefined): string[] {
+  return Array.from(new Set((raw || "").split(",").map((c) => c.trim()).filter(Boolean)));
+}
+
+function cecoStatus(row: AprobacionInvoice): AssignmentStatus {
+  const confirmed = cecoCodes(row.ceco);
+  if (confirmed.length) {
+    return {
+      label: confirmed.length > 1 ? "Confirmado · reparto" : "Confirmado · único",
+      detail: confirmed.join(", "),
+      tone: "ok"
+    };
+  }
+
+  const tickets = row.tickets_mseg || [];
+  const withCeco = tickets.filter((ticket) => Boolean(ticket.ceco)).length;
+  if (row.ceco_sugerido_origen === "ticket") {
+    const multiple = cecoCodes(row.ceco_sugerido).length > 1;
+    return {
+      label: multiple ? "Sugerido · reparto por ticket" : "Sugerido · único por ticket",
+      detail: row.ceco_sugerido || "CECO exacto por ticket",
+      tone: "info"
+    };
+  }
+  if (withCeco > 0 && withCeco < tickets.length) {
+    return { label: "Pendiente · parcial", detail: `${withCeco} de ${tickets.length} tickets con CECO`, tone: "warn" };
+  }
+  if (row.ceco_sugerido_origen === "documento_multiple" || cecoCodes(row.ceco_sugerido).length > 1) {
+    return { label: "Pendiente · varias opciones", detail: row.ceco_sugerido || "", tone: "warn" };
+  }
+  if (row.ceco_sugerido) {
+    return { label: "Sugerido · único", detail: row.ceco_sugerido, tone: "info" };
+  }
+  return { label: "Pendiente · sin sugerencia", detail: "No hay CECO confirmado ni sugerido", tone: "muted" };
+}
+
+function nucleoStatus(raw: string | null | undefined, catalogo: Map<string, string>): AssignmentStatus {
+  const codigos = cecoCodes(raw);
+  if (!codigos.length) return { label: "Sin CECO", detail: "No se puede derivar un núcleo sin CECO", tone: "muted" };
+
+  const sinNucleo = codigos.filter((codigo) => !catalogo.has(codigo));
+  const nombres = Array.from(new Set(codigos.map((codigo) => catalogo.get(codigo)).filter((nombre): nombre is string => Boolean(nombre))));
+  const detail = [nombres.join(" · "), sinNucleo.length ? `Sin núcleo: ${sinNucleo.join(", ")}` : ""].filter(Boolean).join(" · ");
+  if (sinNucleo.length && nombres.length) return { label: "Cobertura parcial", detail, tone: "warn" };
+  if (!nombres.length) return { label: "Sin núcleo", detail, tone: "warn" };
+  if (nombres.length > 1) return { label: "Varios núcleos", detail, tone: "info" };
+  return { label: `Núcleo · ${nombres[0]}`, detail, tone: "ok" };
+}
+
 // Cuando la factura reparte gasto entre varios CECO reales (ago-2026), agrupa
 // tickets_mseg por su CECO sugerido -- una fila por grupo, no por ticket
 // individual (una factura de 69 tickets puede tener solo 14 CECOs distintos).
@@ -166,6 +217,10 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <label className="approval-field"><span>{label}</span>{children}</label>;
 }
 
+function AssignmentBadge({ status }: { status: AssignmentStatus }) {
+  return <span className={`approval-sap-tag is-${status.tone}`} title={status.detail}>{status.label}</span>;
+}
+
 export function AprobacionWorkspace({ cecos, initialCompras, initialError, initialGerencia, initialHistorial, nucleos, sitios, proveedores, ultimaActualizacion, puedeRechazar, roles = ["compras", "gerencia", "historial"] }: Props) {
   const [role, setRole] = useState<Role>(roles[0]);
   const [compras, setCompras] = useState(initialCompras);
@@ -199,13 +254,6 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
     const info = cecoLabel(value, cecoNombrePorId);
     return info ? <span title={info.completo}>{info.corto}</span> : "—";
   }
-  // El CeCo confirmado manda; si Compras todavía no capturó, se intenta con el
-  // sugerido (mismo criterio que cecoInfo en la tabla) -- puede no resolver
-  // ningún núcleo (fuera del alcance del cruce, o pendiente_confirmar).
-  function nucleoDD(value: string | null | undefined) {
-    return (value && nucleoPorCeco.get(value)) || "—";
-  }
-
   const queue = role === "compras" ? compras : role === "gerencia" ? gerencia : historial;
   const rows = queue.rows;
   // Los KPIs (importe/validado SAP/MSEG) son agregados de TODA la cola filtrada,
@@ -387,11 +435,12 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
         <div className="approval-table-wrap">{rows.length || busy ? <table><thead><tr><th>Fecha</th><th>Proveedor</th><th>Folio</th><th>Importe gas</th><th>CECO</th><th>Núcleo</th><th>Centro</th>{role !== "gerencia" ? <th>SAP</th> : null}<th>MSEG</th>{role === "historial" ? <th>Estado</th> : null}</tr></thead><tbody>
           {rows.map((row) => {
             const cecoParaNucleo = row.ceco || row.ceco_sugerido || null;
-            const cecoInfo = row.ceco ? cecoLabel(row.ceco, cecoNombrePorId) : cecoLabel(row.ceco_sugerido, cecoNombrePorId);
+            const estadoCeco = cecoStatus(row);
+            const estadoNucleo = nucleoStatus(cecoParaNucleo, nucleoPorCeco);
             return <tr aria-label={`Revisar factura ${row.serie || ""}${row.folio || row.uuid}`} className={selected?.uuid === row.uuid ? "is-selected" : ""} key={row.uuid} onClick={() => choose(row)} role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); choose(row); } }}>
               <td>{formatDate(row.fecha)}</td><td title={row.proveedor}>{row.proveedor}</td><td>{row.serie || ""}{row.folio || "—"}</td><td>{formatMoney(row.importe_gas)}</td>
-              <td>{cecoInfo ? <span className={`approval-truncate${row.ceco ? "" : " approval-ceco-sugerido"}`} title={cecoInfo.completo}>{cecoInfo.corto}</span> : "Pendiente"}</td>
-              <td>{nucleoDD(cecoParaNucleo)}</td>
+              <td><AssignmentBadge status={estadoCeco} /></td>
+              <td><AssignmentBadge status={estadoNucleo} /></td>
               <td>{row.werks_manual || row.sitio_consumo || row.werks || "—"}</td>
               {role !== "gerencia" ? <td>{row.estado_sap ? <span className={`approval-sap-tag${row.estado_sap === "validada_sap" ? " is-ok" : " is-warn"}`}>{row.estado_sap === "validada_sap" ? "Validada" : "Sin match"}</span> : "—"}</td> : null}
               <td>{row.confianza_mseg ? <span className={`approval-sap-tag${row.confianza_mseg === "Alta" ? " is-ok" : " is-warn"}`} title={CONFIANZA_MSEG_LABEL[row.confianza_mseg]}>{row.confianza_mseg}</span> : "—"}</td>
@@ -409,9 +458,20 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
           <div className="approval-decision-summary" aria-label="Resumen para decidir">
             <div><span>SAP</span><strong className={selected.estado_sap === "validada_sap" ? "is-good" : "is-warning"}>{selected.estado_sap === "validada_sap" ? "Validada" : "Sin match"}</strong></div>
             <div><span>MSEG</span><strong className={selected.confianza_mseg ? "is-good" : "is-warning"}>{selected.confianza_mseg || "Sin evidencia"}</strong></div>
-            <div><span>CECO</span><strong className={ceco.trim() || selected.ceco ? "is-good" : "is-warning"}>{ceco.trim() || selected.ceco ? "Asignado" : "Pendiente"}</strong></div>
+            <div><span>CECO</span><strong className={selected.ceco ? "is-good" : selected.ceco_sugerido ? "" : "is-warning"}>{cecoStatus(selected).label}</strong></div>
           </div>
-          <dl className="approval-invoice-data"><dt>Proveedor</dt><dd>{selected.proveedor}</dd><dt>Fecha</dt><dd>{formatDate(selected.fecha)}</dd><dt>Importe gas</dt><dd>{formatMoney(selected.importe_gas)}</dd><dt>Clasificación</dt><dd>{selected.es_mixta ? "Mixta" : "Gas"}</dd><dt>Estado SAP</dt><dd>{selected.estado_sap === "validada_sap" ? "Validada SAP" : "Sin match SAP"}</dd><dt>Núcleo</dt><dd>{nucleoDD(selected.ceco || selected.ceco_sugerido)}</dd></dl>
+          <dl className="approval-invoice-data"><dt>Proveedor</dt><dd>{selected.proveedor}</dd><dt>Fecha</dt><dd>{formatDate(selected.fecha)}</dd><dt>Importe gas</dt><dd>{formatMoney(selected.importe_gas)}</dd><dt>Clasificación</dt><dd>{selected.es_mixta ? "Mixta" : "Gas"}</dd><dt>Estado SAP</dt><dd>{selected.estado_sap === "validada_sap" ? "Validada SAP" : "Sin match SAP"}</dd></dl>
+
+          <div className="approval-audit">
+            <p>Asignación CECO y núcleo</p>
+            <dl>
+              <dt>Estado CECO</dt><dd><AssignmentBadge status={cecoStatus(selected)} /></dd>
+              <dt>{selected.ceco ? "CECO confirmado" : "CECO sugerido"}</dt><dd>{cecoDD(selected.ceco || selected.ceco_sugerido)}</dd>
+              <dt>Estado núcleo</dt><dd><AssignmentBadge status={nucleoStatus(selected.ceco || selected.ceco_sugerido, nucleoPorCeco)} /></dd>
+              <dt>Núcleos</dt><dd>{nucleoStatus(selected.ceco || selected.ceco_sugerido, nucleoPorCeco).detail}</dd>
+              {selected.ceco_sugerido_origen ? <><dt>Origen</dt><dd>{CECO_ORIGEN_LABEL[selected.ceco_sugerido_origen]}</dd></> : null}
+            </dl>
+          </div>
 
           <div className="approval-audit approval-cfdi">
             <p>Información del CFDI</p>
@@ -445,29 +505,27 @@ export function AprobacionWorkspace({ cecos, initialCompras, initialError, initi
               {selected.confianza_mseg ? <><dt>Cantidad</dt><dd>{selected.mseg_cantidad == null ? "—" : String(selected.mseg_cantidad)}</dd><dt>Importe</dt><dd>{formatMoney(selected.mseg_importe)}</dd></> : null}
               {selected.ceco_sugerido_origen ? <><dt>CECO sugerido</dt><dd>{CECO_ORIGEN_LABEL[selected.ceco_sugerido_origen]}</dd></> : null}
             </dl>
-            {selected.tickets_mseg && selected.tickets_mseg.length > 0 ? <div className="approval-tickets">
-              <p className="approval-tickets-title">
-                Desglose por ticket de entrega ({selected.mseg_n_tickets_match ?? 0} de {selected.mseg_n_tickets ?? selected.tickets_mseg.length} casan exacto)
-              </p>
-              <div className="approval-tickets-wrap"><table className="approval-tickets-table">
-                <thead><tr><th>Ticket</th><th>Cantidad</th><th>Importe</th><th>CECO</th></tr></thead>
-                <tbody>
-                  {selected.tickets_mseg.map((t, i) => {
-                    // Si Compras ya confirmó un CECO por ticket, se muestra ese en vez del
-                    // simplemente sugerido -- para que Gerencia/Historial revisen la decisión
-                    // real, no solo la evidencia automática.
-                    const cecoAMostrar = cecoConfirmadoPorTicket.get(t.ticket || "") ?? t.ceco;
-                    const cecoInfo = cecoAMostrar ? cecoLabel(cecoAMostrar, cecoNombrePorId) : null;
-                    return <tr className={t.match_exacto ? "" : "is-sin-match"} key={`${t.ticket}-${i}`}>
-                      <td title={t.ticket || undefined}>{ticketCorto(t.ticket)}</td>
-                      <td>{t.cantidad_ticket == null ? "—" : quantity.format(t.cantidad_ticket)}</td>
-                      <td>{formatMoney(t.importe_ticket)}</td>
-                      <td>{cecoInfo ? <span title={cecoInfo.completo}>{cecoInfo.corto}</span> : t.match_exacto ? "—" : "Sin match"}</td>
-                    </tr>;
-                  })}
-                </tbody>
-              </table></div>
-            </div> : null}
+          </div> : null}
+
+          {selected.tickets_mseg && selected.tickets_mseg.length > 0 ? <div className="approval-audit approval-tickets">
+            <p>Desglose CECO y núcleo por ticket ({selected.mseg_n_tickets_match ?? 0} de {selected.mseg_n_tickets ?? selected.tickets_mseg.length} casan exacto)</p>
+            <div className="approval-tickets-wrap"><table className="approval-tickets-table">
+              <thead><tr><th>Ticket</th><th>Cantidad</th><th>Importe</th><th>CECO</th><th>Núcleo</th></tr></thead>
+              <tbody>
+                {selected.tickets_mseg.map((t, i) => {
+                  const cecoAMostrar = cecoConfirmadoPorTicket.get(t.ticket || "") ?? t.ceco;
+                  const cecoInfo = cecoAMostrar ? cecoLabel(cecoAMostrar, cecoNombrePorId) : null;
+                  const estadoNucleo = nucleoStatus(cecoAMostrar, nucleoPorCeco);
+                  return <tr className={t.match_exacto ? "" : "is-sin-match"} key={`${t.ticket}-${i}`}>
+                    <td title={t.ticket || undefined}>{ticketCorto(t.ticket)}</td>
+                    <td>{t.cantidad_ticket == null ? "—" : quantity.format(t.cantidad_ticket)}</td>
+                    <td>{formatMoney(t.importe_ticket)}</td>
+                    <td>{cecoInfo ? <span title={cecoInfo.completo}>{cecoInfo.corto}</span> : t.match_exacto ? "—" : "Sin match"}</td>
+                    <td><AssignmentBadge status={estadoNucleo} /></td>
+                  </tr>;
+                })}
+              </tbody>
+            </table></div>
           </div> : null}
 
           {puedeEditar ? <div className="approval-form">

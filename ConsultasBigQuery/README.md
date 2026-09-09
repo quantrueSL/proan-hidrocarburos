@@ -6,7 +6,7 @@ CFDI↔SAP nunca es exacto (grano distinto entre sistemas, tolerancias,
 CECO/sitio como evidencia y no como dato exacto) en
 [`docs/data/naturaleza-de-los-datos.md`](../docs/data/naturaleza-de-los-datos.md).
 
-**Estado actual: ejecutadas y validadas contra BigQuery (jul-2026)**. Al
+**Estado actual: ejecutadas y validadas contra BigQuery (jul-sep-2026)**. Al
 ejecutar aparecieron 6 bugs reales que ninguna revisión estática detectó
 (detalle en el header de cada `.sql`): partición `ROW_NUMBER()` por `FLOAT64`
 no permitida, nombre real de columna `BELNR_account_document_number`,
@@ -26,8 +26,10 @@ de filas que `_FOLIO` (1.051=1.051) — los conceptos no-gas de una factura
 mixta no se guardan como filas aparte en `cfdis` (Fase 1 §16), sin desglose
 real que mostrar. **Eliminada** de `HCARB_gold_clasificacion.sql` y borrada
 de BigQuery (`DROP TABLE`, jul-2026, autorizado explícitamente). Quedan 3
-tablas `HCARB_*` vivas: `HCARB_STG_VENDORS` (D50), `HCARB_GOLD_CLASIFICACION_FOLIO`
-y `HCARB_GOLD_VALIDACION_SAP` (D60).
+tablas `HCARB_*` materializadas por las consultas de esta carpeta:
+`HCARB_STG_VENDORS` (D50), `HCARB_GOLD_CLASIFICACION_FOLIO` y
+`HCARB_GOLD_VALIDACION_SAP` (D60). Existen además las tablas mutables y el
+catálogo `HCARB_dim_nucleo` descritos más abajo.
 
 **Trazabilidad de clasificación (jul-2026):** `HCARB_GOLD_CLASIFICACION_FOLIO`
 lleva ahora `claves_gas` (array de claves SAT distintas que clasificaron la
@@ -264,12 +266,29 @@ Cifras medidas en BigQuery real, antes → después:
   archivos (eran una copia desincronizada de antes de la migración a
   `cfdi_completo`; sin templating propio de Airflow, la copia es literal).
 - `HCARB_dim_nucleo_draft` se promovió a `HCARB_dim_nucleo` (92 filas, 57
-  `confirmado`, 35 `pendiente_confirmar` — no bloquean, caen en "Sin núcleo
-  asignado").
-- Pendiente solo la limpieza de artefactos de prueba (los 2 `.sql` `_fer`,
-  las tablas `_fer`/`_draft`/`_bak` en BigQuery, y las 4 líneas
-  `HCARB_*_TABLE=` de `config/financialbi.env`) — se deja para después de
-  verificar el despliegue en producción, a propósito, como red de seguridad.
+  `confirmado`, 35 `pendiente_confirmar` con `ceco=NULL`; no bloquean y no
+  participan en el cruce hasta que se confirme un KOSTL).
+- La limpieza posterior de artefactos `_fer`/`_draft`/`_bak` y overrides de
+  configuración quedó completada en `d0ef882`; ya no forman parte del estado
+  operativo. Solo sobreviven comentarios históricos que usan `_fer` como
+  ejemplo de una tabla alternativa.
+
+**Snapshot posterior, 2026-09-09:** al ser mutable la fuente, el universo ya
+es de 657 facturas: 611 `validada_sap`, 497 MSEG `Alta`, 9 `Media`, 437 con
+centro, 284 CECO por `ticket`, 41 por `proveedor`, 11 por `documento`, 157
+`documento_multiple` y 164 sin sugerencia. Las cifras de despliegue anteriores
+se conservan como historia antes→después, no como total actual permanente.
+
+La auditoría posterior del Excel de Methagas y los maestros SAP queda en
+`docs/data/nucleos-y-conciliacion.md`, sección "Autoridad y estados del
+cruce". Methagas es la fuente autoritativa de la agrupación y SAP de la
+identidad del CECO. El 2026-09-09 se añadieron y poblaron en producción
+`estado_identificacion_ceco`, `estado_asignacion_nucleo` y
+`fuente_asignacion`, manteniendo `estado` solo por compatibilidad. También se
+cargaron `Nacimi y proc pollit` → `0000041792` y Tetillas 1/2/3 →
+`0000041929`/`0000041930`/`0000041931`. Los CECO ya identificados que estaban
+bajo el núcleo literal `Por confirmar` conservan su identidad, pero ahora su
+asignación está `pendiente_negocio` y no participa en la herramienta.
 
 ## Datasets (reutilizados, ninguno nuevo)
 
@@ -283,10 +302,8 @@ Cifras medidas en BigQuery real, antes → después:
 2. `HCARB_gold_clasificacion.sql` (depende de 1)
 3. `HCARB_gold_validacion_sap.sql` (depende de 2)
 
-`HCARB_gold_clasificacion_fer.sql`/`HCARB_gold_validacion_sap_fer.sql` (rama
-`Fer`, ago-2026) son variantes de prueba temporales de 2 y 3 — no forman
-parte de este orden real, escriben en tablas `_fer` aparte, ver "Estado de la
-rama `Fer`" más arriba.
+Las antiguas variantes temporales `_fer` de los pasos 2 y 3 se eliminaron en
+`d0ef882`; el orden anterior enumera únicamente los artefactos vivos.
 
 ![Linaje de tablas: fuentes → queries → HCARB_*](./linaje-tablas.png)
 

@@ -27,7 +27,7 @@ const VARIOS_CECO_LABEL = "Varios CECO (sin confirmar)";
 
 // Debe coincidir exactamente con la etiqueta que arma dashboard_engine.py
 // (_gasto_por_nucleo) para las facturas cuyo CeCo no está (todavía) en el
-// cruce Núcleo<->CeCo confirmado -- ver HALLAZGOS-FER.md secc. 11.
+// cruce Núcleo<->CeCo confirmado -- ver docs/data/nucleos-y-conciliacion.md.
 const SIN_NUCLEO_LABEL = "Sin núcleo asignado";
 
 const APPROVAL_LABEL: Record<string, string> = {

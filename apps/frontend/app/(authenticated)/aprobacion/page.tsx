@@ -31,7 +31,7 @@ export default async function AprobacionPage() {
     // Compras), Núcleo es de solo lectura -- Gerencia sí lo necesita para ver
     // a qué núcleo pertenece cada factura que va a aprobar/rechazar.
     [gerencia, nucleos, filtrosCatalog] = await Promise.all([
-      getAprobacionGerencia(session),
+      getAprobacionGerencia(session, { page_size: 100 }),
       getAprobacionCatalogNucleo(session),
       getHydrocarburosCatalog(session)
     ]);

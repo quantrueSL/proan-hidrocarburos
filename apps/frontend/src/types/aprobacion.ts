@@ -46,9 +46,8 @@ export type AprobacionInvoice = {
   belnr_pago_sap: string | null;
   fecha_pago_sap: string | null;
   tipo_match_sitio: string | null;
-  // 'Alta' = folio e importe casan exacto (recepción 1:1 verificable); 'Media' = solo el
-  // folio casa (evidencia de recepción, pero el documento SAP suele ser consolidado y su
-  // importe no reconcilia el monto de esta factura); null = sin recepción asociada.
+  // 'Alta' = folio e importe de documento compatibles, o todos los tickets casan su ZEILE;
+  // 'Media' = solo el folio casa sin desglose completo; null = sin recepción asociada.
   confianza_mseg: "Alta" | "Media" | null;
   mseg_cantidad: number | null;
   mseg_valor_unitario: number | null;

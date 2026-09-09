@@ -46,6 +46,7 @@ describe("aprobacionGetRequirement", () => {
     expect(aprobacionGetRequirement("historial")).toBe("any");
     expect(aprobacionGetRequirement("catalogo/ceco")).toBe("any");
     expect(aprobacionGetRequirement("catalogo/sitios")).toBe("any");
+    expect(aprobacionGetRequirement("catalogo/nucleo")).toBe("any");
   });
 
   it("reserva la bandeja de Gerencia", () => {
