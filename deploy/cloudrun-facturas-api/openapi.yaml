@@ -39,7 +39,7 @@ paths:
 
   /v1/facturas:
     get:
-      summary: Buscar facturas por RFC emisor / Serie / Folio / rango de fecha
+      summary: Buscar facturas por RFC emisor / Serie / Folio / fechas / núcleo
       operationId: buscarFacturas
       parameters:
         - name: rfc_emisor
@@ -59,6 +59,10 @@ paths:
           in: query
           type: string
           format: date
+        - name: nucleo
+          in: query
+          type: string
+          description: Nombre exacto del núcleo operativo; no es un identificador estable.
       responses:
         "200":
           description: Lista de facturas coincidentes (puede ser vacía)

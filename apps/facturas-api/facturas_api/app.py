@@ -47,6 +47,7 @@ class FacturaMetadata(BaseModel):
     total: float | None
     moneda: str | None
     estatus_cancelacion_sat: str | None
+    nucleos: list[str]
     urls: dict[str, str]
 
 
@@ -67,6 +68,7 @@ def _a_metadata(row: dict[str, Any]) -> FacturaMetadata:
         total=row.get("total"),
         moneda=row.get("moneda"),
         estatus_cancelacion_sat=row.get("estatus_cancelacion"),
+        nucleos=row.get("nucleos") or [],
         urls={
             "xml": f"/v1/facturas/{uuid}/xml",
             "pdf": f"/v1/facturas/{uuid}/pdf",
@@ -105,6 +107,7 @@ def buscar_facturas(
     folio: str | None = Query(default=None),
     fecha_desde: date | None = Query(default=None),
     fecha_hasta: date | None = Query(default=None),
+    nucleo: str | None = Query(default=None),
 ) -> list[FacturaMetadata]:
     if fecha_desde and fecha_hasta and fecha_desde > fecha_hasta:
         raise _error(400, "parametros_invalidos", "fecha_desde no puede ser posterior a fecha_hasta.")
@@ -115,6 +118,7 @@ def buscar_facturas(
             folio=folio,
             fecha_desde=fecha_desde.isoformat() if fecha_desde else None,
             fecha_hasta=fecha_hasta.isoformat() if fecha_hasta else None,
+            nucleo=nucleo,
         )
     except Exception as exc:
         log.exception("facturas search error")

@@ -33,12 +33,55 @@ _CFDI_RAW = f"`{_CFDI_RAW_TABLE}`"
 _ESTATUS_SAT_TABLE = os.getenv("HCARB_ESTATUS_SAT_TABLE", "proan-quantrue.D60_REPORTING.HCARB_ESTATUS_SAT")
 _ESTATUS_SAT = f"`{_ESTATUS_SAT_TABLE}`"
 
+_APROBACION_TABLE = os.getenv("HCARB_APROBACION_TABLE", "proan-quantrue.D60_REPORTING.HCARB_gold_aprobacion")
+_APROBACION = f"`{_APROBACION_TABLE}`"
+
+_SAP_TABLE = os.getenv("HCARB_SAP_TABLE", "proan-quantrue.D60_REPORTING.HCARB_GOLD_VALIDACION_SAP")
+_SAP = f"`{_SAP_TABLE}`"
+
+_NUCLEO_TABLE = os.getenv("HCARB_NUCLEO_TABLE", "proan-quantrue.D60_REPORTING.HCARB_dim_nucleo")
+_NUCLEO = f"`{_NUCLEO_TABLE}`"
+
 _METADATA_SELECT = """
   SELECT
     c.UUID AS uuid, c.Serie AS serie, c.Folio AS folio, c.Fecha AS fecha,
     c.EmisorRfc AS rfc_emisor, c.EmisorNombre AS nombre_emisor,
     c.Total AS total, c.Moneda AS moneda,
-    e.estatus_cancelacion
+    e.estatus_cancelacion,
+    ARRAY(
+      SELECT DISTINCT nucleo
+      FROM UNNEST(ARRAY_CONCAT(
+        IF(nuc.nucleo IS NULL, CAST([] AS ARRAY<STRING>), [nuc.nucleo]),
+        COALESCE(reparto.nucleos, CAST([] AS ARRAY<STRING>))
+      )) AS nucleo
+      ORDER BY nucleo
+    ) AS nucleos
+"""
+
+_METADATA_JOINS = f"""
+  FROM {_CFDI_CABECERA} c
+  INNER JOIN {_FOLIO} f ON f.uuid = c.UUID
+  LEFT JOIN {_ESTATUS_SAT} e ON e.uuid = c.UUID
+  LEFT JOIN {_APROBACION} a ON a.uuid = c.UUID
+  LEFT JOIN {_SAP} s ON s.uuid = c.UUID
+  LEFT JOIN {_NUCLEO} nuc
+    ON nuc.ceco = COALESCE(a.ceco, s.ceco_sugerido)
+    AND nuc.estado_identificacion_ceco = 'confirmado'
+    AND nuc.estado_asignacion_nucleo = 'confirmada'
+  LEFT JOIN (
+    SELECT
+      a_reparto.uuid,
+      ARRAY_AGG(DISTINCT nuc_reparto.nucleo IGNORE NULLS ORDER BY nuc_reparto.nucleo) AS nucleos
+    FROM {_APROBACION} a_reparto
+    CROSS JOIN UNNEST(JSON_EXTRACT_ARRAY(a_reparto.ceco_por_ticket)) AS ticket_json
+    LEFT JOIN {_NUCLEO} nuc_reparto
+      ON nuc_reparto.ceco = JSON_VALUE(ticket_json, '$.ceco')
+      AND nuc_reparto.estado_identificacion_ceco = 'confirmado'
+      AND nuc_reparto.estado_asignacion_nucleo = 'confirmada'
+    WHERE a_reparto.ceco_por_ticket IS NOT NULL
+      AND JSON_VALUE(ticket_json, '$.ceco') IS NOT NULL
+    GROUP BY a_reparto.uuid
+  ) reparto ON reparto.uuid = c.UUID
 """
 
 
@@ -53,9 +96,7 @@ def get_factura_metadata(uuid: str) -> dict[str, Any] | None:
     resultado para los dos casos, a propósito (ver `app.py`)."""
     query = f"""
       {_METADATA_SELECT}
-      FROM {_CFDI_CABECERA} c
-      INNER JOIN {_FOLIO} f ON f.uuid = c.UUID
-      LEFT JOIN {_ESTATUS_SAT} e ON e.uuid = c.UUID
+      {_METADATA_JOINS}
       WHERE c.UUID = @uuid
       LIMIT 1
     """
@@ -71,6 +112,7 @@ def buscar_facturas(
     folio: str | None,
     fecha_desde: str | None,
     fecha_hasta: str | None,
+    nucleo: str | None,
 ) -> list[dict[str, Any]]:
     """Búsqueda por el identificador "humano" (RFC emisor + Serie + Folio),
     con rango de fecha opcional -- ver docs/data/naturaleza-de-los-datos.md sobre
@@ -98,13 +140,28 @@ def buscar_facturas(
     if fecha_hasta:
         clauses.append("SUBSTR(c.Fecha, 1, 10) <= @fecha_hasta")
         params.append(bigquery.ScalarQueryParameter("fecha_hasta", "STRING", fecha_hasta))
+    if nucleo:
+        # Mismo criterio que el dashboard: un núcleo puede derivarse del CECO
+        # único (aprobación/SAP) o de cualquiera de los CECO por ticket.
+        # EXISTS evita multiplicar facturas cuando el reparto tiene varios CECO.
+        clauses.append(f"""(
+          nuc.nucleo = @nucleo
+          OR EXISTS (
+            SELECT 1
+            FROM UNNEST(JSON_EXTRACT_ARRAY(a.ceco_por_ticket)) AS ticket_json
+            JOIN {_NUCLEO} nuc_ticket
+              ON nuc_ticket.ceco = JSON_VALUE(ticket_json, '$.ceco')
+              AND nuc_ticket.estado_identificacion_ceco = 'confirmado'
+              AND nuc_ticket.estado_asignacion_nucleo = 'confirmada'
+            WHERE nuc_ticket.nucleo = @nucleo
+          )
+        )""")
+        params.append(bigquery.ScalarQueryParameter("nucleo", "STRING", nucleo))
 
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     query = f"""
       {_METADATA_SELECT}
-      FROM {_CFDI_CABECERA} c
-      INNER JOIN {_FOLIO} f ON f.uuid = c.UUID
-      LEFT JOIN {_ESTATUS_SAT} e ON e.uuid = c.UUID
+      {_METADATA_JOINS}
       {where}
       ORDER BY c.Fecha DESC
       LIMIT 100
