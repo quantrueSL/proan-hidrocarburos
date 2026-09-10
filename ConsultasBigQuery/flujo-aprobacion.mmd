@@ -1,5 +1,5 @@
 stateDiagram-v2
-    [*] --> pendiente_validacion_compras: sync_pendientes (alta desde M1)
+    [*] --> pendiente_validacion_compras: hcarb_sync_pendientes (Airflow, alta desde M1)
 
     pendiente_validacion_compras --> pendiente_aprobacion_gerencia: capturar_compras (Compras CECO+sitio)
     pendiente_aprobacion_gerencia --> pendiente_aprobacion_gerencia: capturar_compras (Compras re-edita)

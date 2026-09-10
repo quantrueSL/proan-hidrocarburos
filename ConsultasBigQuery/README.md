@@ -328,8 +328,11 @@ es reutilizable sin leer Python:
   esquema + máquina de estados completa en
   [`HCARB_gold_aprobacion_schema.sql`](./HCARB_gold_aprobacion_schema.sql),
   diagrama en [`flujo-aprobacion.png`](./flujo-aprobacion.png) (fuente
-  [`flujo-aprobacion.mmd`](./flujo-aprobacion.mmd)). La escribe
-  `apps/financialbi/financialbi/aprobacion_engine.py`.
+  [`flujo-aprobacion.mmd`](./flujo-aprobacion.mmd)). Las decisiones humanas
+  las escribe `apps/financialbi/financialbi/aprobacion_engine.py`. El alta
+  idempotente de nuevas facturas se ejecuta en Airflow con
+  [`HCARB_sync_pendientes.sql`](./HCARB_sync_pendientes.sql), después de la
+  clasificación.
 - **`HCARB_ESTATUS_SAT`** (D24, estatus de cancelación ante el SAT) —
   esquema + mecánica en
   [`HCARB_estatus_sat_schema.sql`](./HCARB_estatus_sat_schema.sql), diagrama

@@ -118,33 +118,6 @@ def _rows(query: str, params: list[bigquery.ScalarQueryParameter] | None = None)
     return [dict(row.items()) for row in result]
 
 
-def sync_pendientes() -> int:
-    """Da de alta en HCARB_gold_aprobacion las facturas clasificadas (M1) que
-    todavía no tienen fila -- quedan en pendiente_validacion_compras. Se llama
-    en cada carga de la cola de Compras.
-
-    MERGE, no INSERT...SELECT anti-join (ago-2026, fix de duplicados): el
-    anti-join original hacía el SELECT ("¿ya existe?") y el INSERT como dos
-    pasos separados -- si dos peticiones concurrentes llegaban antes de que la
-    primera hiciera commit (más probable justo cuando la tabla está vacía o
-    recién creada: varias pestañas/usuarios cargando Compras a la vez, medido
-    reproduciendo el caso -- 100% de las filas duplicadas 3 veces), ambas veían
-    "sin fila todavía" e insertaban la MISMA factura más de una vez (BigQuery
-    no tiene restricciones UNIQUE que lo impidan). MERGE decide e inserta en un
-    solo statement atómico, y BigQuery serializa los MERGE concurrentes sobre
-    la misma tabla (uno de los dos falla y se puede reintentar) en vez de
-    dejarlos pasar a ambos sin más."""
-    query = f"""
-      MERGE {_APROBACION} a
-      USING {_FOLIO} f ON f.uuid = a.uuid
-      WHEN NOT MATCHED THEN
-        INSERT (uuid, estado) VALUES (f.uuid, 'pendiente_validacion_compras')
-    """
-    job = _client().query(query)
-    job.result()
-    return job.num_dml_affected_rows or 0
-
-
 _SELECT_COLA = """
         a.uuid, a.estado, a.ceco, a.ceco_por_ticket, a.werks_manual,
         a.usuario_compras, a.fecha_validacion_compras, a.comentario_compras,
@@ -295,7 +268,6 @@ def _paginar_cola(
 
 
 def cola_compras(*, page: int = 1, page_size: int = 50, **filtros: Any) -> dict[str, Any]:
-    sync_pendientes()
     where, params = _filtros_cola(**filtros)
     full_params = [bigquery.ScalarQueryParameter("estado", "STRING", "pendiente_validacion_compras")] + params
     return _paginar_cola(_cola_from(f"a.estado = @estado AND ({where})"), full_params, "fecha DESC", page, page_size)

@@ -6,6 +6,8 @@ import type { FacturaDocumentType, FacturaMetadata } from "@/types/facturas";
 export type RfcSuggestion = { nombre: string; rfc: string };
 type Props = { apiUrl: string; initialError: string | null; nucleos: string[]; rfcSuggestions: RfcSuggestion[] };
 type SelectedDocuments = Record<FacturaDocumentType, boolean>;
+type SearchMode = "idle" | "replace" | "append";
+type SearchRequest = { append: boolean; offset: number };
 
 const PAGE_SIZE = 100;
 const initialDocuments: SelectedDocuments = { metadata: false, pdf: true, xml: true };
@@ -42,6 +44,18 @@ function RfcChipsInput({ onChange, suggestions, values }: { onChange: (values: s
   </div></label>;
 }
 
+function ResultsSkeleton() {
+  return <section aria-busy="true" aria-label="Buscando facturas" className="api-results api-results-skeleton" role="status">
+    <div className="api-results-toolbar"><div><span className="api-skeleton-line is-label" /><span className="api-skeleton-line is-title" /></div></div>
+    <div className="api-skeleton-table">{Array.from({ length: 7 }, (_, index) => <span key={index} />)}</div>
+    <span className="sr-only">Buscando facturas…</span>
+  </section>;
+}
+
+function TableLoadingRows({ count = 4 }: { count?: number }) {
+  return <>{Array.from({ length: count }, (_, index) => <tr aria-hidden="true" className="api-skeleton-row" key={index}><td colSpan={8}><span /></td></tr>)}</>;
+}
+
 export function FacturasApiWorkspace({ apiUrl, initialError, nucleos, rfcSuggestions }: Props) {
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
@@ -53,9 +67,12 @@ export function FacturasApiWorkspace({ apiUrl, initialError, nucleos, rfcSuggest
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [documents, setDocuments] = useState<SelectedDocuments>(initialDocuments);
   const [names, setNames] = useState<Record<string, { pdf?: string; xml?: string }>>({});
-  const [loading, setLoading] = useState(false);
+  const [searchMode, setSearchMode] = useState<SearchMode>("idle");
   const [downloading, setDownloading] = useState(false);
-  const [error, setError] = useState(initialError);
+  const [searchError, setSearchError] = useState(initialError ? "No se pudieron obtener las facturas. Vuelve a intentarlo." : null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [lastSearch, setLastSearch] = useState<SearchRequest | null>(null);
+  const [downloadStarted, setDownloadStarted] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -68,8 +85,17 @@ export function FacturasApiWorkspace({ apiUrl, initialError, nucleos, rfcSuggest
     return () => { document.body.style.overflow = previousOverflow; window.removeEventListener("keydown", closeOnEscape); };
   }, [terminalOpen]);
 
+  useEffect(() => {
+    if (!downloadStarted) return;
+    const timeout = window.setTimeout(() => setDownloadStarted(false), 4000);
+    return () => window.clearTimeout(timeout);
+  }, [downloadStarted]);
+
   const selectedRows = useMemo(() => rows.filter((row) => selected.has(row.uuid)), [rows, selected]);
   const enabledDocuments = (Object.keys(documents) as FacturaDocumentType[]).filter((document) => documents[document]);
+  const loading = searchMode !== "idle";
+  const appending = searchMode === "append";
+  const replacing = searchMode === "replace";
 
   function queryParams(nextOffset: number) {
     const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(nextOffset) });
@@ -81,7 +107,7 @@ export function FacturasApiWorkspace({ apiUrl, initialError, nucleos, rfcSuggest
   }
 
   function reset() {
-    setFechaDesde(""); setFechaHasta(""); setRfcs([]); setSelectedNucleos([]); setRows([]); setSelected(new Set()); setHasMore(false); setOffset(0); setError(null);
+    setFechaDesde(""); setFechaHasta(""); setRfcs([]); setSelectedNucleos([]); setRows([]); setSelected(new Set()); setHasMore(false); setOffset(0); setSearchError(null); setDownloadError(null); setLastSearch(null);
   }
 
   function toggleNucleo(nucleo: string) {
@@ -89,7 +115,7 @@ export function FacturasApiWorkspace({ apiUrl, initialError, nucleos, rfcSuggest
   }
 
   async function search(nextOffset = 0, append = false) {
-    setLoading(true); setError(null);
+    setSearchMode(append ? "append" : "replace"); setSearchError(null); setLastSearch({ append, offset: nextOffset });
     if (!append) setFiltersOpen(false);
     try {
       const response = await fetch(`/api/facturas/search?${queryParams(nextOffset).toString()}`);
@@ -100,13 +126,14 @@ export function FacturasApiWorkspace({ apiUrl, initialError, nucleos, rfcSuggest
       setHasMore(nextRows.length === PAGE_SIZE);
       if (!append) setSelected(new Set());
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "No se pudieron buscar las facturas.");
-    } finally { setLoading(false); }
+      console.error("Facturas API search failed", cause);
+      setSearchError("No se pudieron obtener las facturas. Vuelve a intentarlo.");
+    } finally { setSearchMode("idle"); }
   }
 
   async function download() {
     if (!selectedRows.length || !enabledDocuments.length) return;
-    setDownloading(true); setError(null);
+    setDownloading(true); setDownloadError(null);
     try {
       const response = await fetch("/api/facturas/download", {
         method: "POST",
@@ -122,8 +149,10 @@ export function FacturasApiWorkspace({ apiUrl, initialError, nucleos, rfcSuggest
       const link = document.createElement("a");
       link.href = url; link.download = "facturas.zip"; link.click();
       URL.revokeObjectURL(url);
+      setDownloadStarted(true);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "No se pudo preparar el ZIP.");
+      console.error("Facturas API download failed", cause);
+      setDownloadError("No se pudo preparar el ZIP. Vuelve a intentarlo.");
     } finally { setDownloading(false); }
   }
 
@@ -146,15 +175,18 @@ export function FacturasApiWorkspace({ apiUrl, initialError, nucleos, rfcSuggest
         </div>
         <div className="api-nucleo-field"><div><span>Núcleos</span>{selectedNucleos.length ? <button onClick={() => setSelectedNucleos([])} type="button">Limpiar selección</button> : null}</div><div className="api-nucleo-grid">{nucleos.map((nucleo) => <label key={nucleo}><input checked={selectedNucleos.includes(nucleo)} onChange={() => toggleNucleo(nucleo)} type="checkbox" /><span>{nucleo}</span></label>)}</div></div>
       </div> : null}
-      <div className="api-filter-actions"><button aria-label="Buscar facturas" className="hydro-button" disabled={loading} onClick={() => search()} type="button">{loading ? "…" : <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="5.5" /><path d="m15 15 4.5 4.5" /></svg>}</button><button className="api-reset-button" onClick={reset} type="button">Restablecer</button></div>
+      <div className="api-filter-actions"><button className="hydro-button api-search-button" disabled={loading} onClick={() => search()} type="button">{loading ? <><span aria-hidden="true" className="api-inline-spinner" />{appending ? "Cargando más…" : "Buscando facturas…"}</> : "Buscar facturas"}</button><button className="api-reset-button" onClick={reset} type="button">Restablecer</button></div>
     </section>
 
-    {error ? <p className="hydro-error" role="alert">{error}</p> : null}
-    {rows.length ? <section className="api-results">
-      <div className="api-results-toolbar"><div><p>Resultados cargados</p><h2>{rows.length} factura{rows.length === 1 ? "" : "s"}</h2></div><div className="api-download-controls">{(Object.keys(documents) as FacturaDocumentType[]).map((document) => <label key={document}><span>{document === "metadata" ? "Metadata" : document.toUpperCase()}</span><input checked={documents[document]} onChange={() => setDocuments({ ...documents, [document]: !documents[document] })} role="switch" type="checkbox" /><b>{documents[document] ? "Incluir" : "No incluir"}</b></label>)}<button className="hydro-button api-download-button" disabled={!selectedRows.length || !enabledDocuments.length || downloading} onClick={download} type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v11m0 0 4-4m-4 4-4-4M5 18v3h14v-3" /></svg>{downloading ? "Generando ZIP…" : `Descargar ZIP (${selectedRows.length})`}</button></div></div>
-      <div className="api-table-wrap"><table><thead><tr><th><input aria-label="Seleccionar todas las facturas cargadas" checked={rows.length > 0 && selected.size === rows.length} onChange={(event) => setSelected(event.target.checked ? new Set(rows.map((row) => row.uuid)) : new Set())} type="checkbox" /></th><th>Fecha</th><th>Proveedor / RFC</th><th>Folio</th><th>Total</th><th>Núcleos</th><th>Nombre PDF</th><th>Nombre XML</th></tr></thead><tbody>{rows.map((row) => <tr key={row.uuid}><td><input aria-label={`Seleccionar factura ${row.uuid}`} checked={selected.has(row.uuid)} onChange={(event) => setSelected((current) => { const next = new Set(current); event.target.checked ? next.add(row.uuid) : next.delete(row.uuid); return next; })} type="checkbox" /></td><td>{displayDate(row.fecha)}</td><td><strong>{row.nombre_emisor || "—"}</strong><small>{row.rfc_emisor || "—"}</small></td><td>{row.serie || ""}{row.folio || "—"}</td><td>{row.total == null ? "—" : `${moneyFormatter.format(row.total)} ${row.moneda && row.moneda !== "MXN" ? row.moneda : ""}`}</td><td>{row.nucleos.length ? row.nucleos.join(" · ") : "Sin núcleo confirmado"}</td><td><input aria-label={`Nombre PDF de ${row.uuid}`} onChange={(event) => setNames({ ...names, [row.uuid]: { ...names[row.uuid], pdf: event.target.value } })} value={names[row.uuid]?.pdf ?? defaultName(row, ".pdf")} /></td><td><input aria-label={`Nombre XML de ${row.uuid}`} onChange={(event) => setNames({ ...names, [row.uuid]: { ...names[row.uuid], xml: event.target.value } })} value={names[row.uuid]?.xml ?? defaultName(row, ".xml")} /></td></tr>)}</tbody></table></div>
-      {hasMore ? <div className="api-load-more"><button disabled={loading} onClick={() => search(offset, true)} type="button">{loading ? "Cargando…" : "Cargar más"}</button></div> : null}
-    </section> : !loading ? <section className="api-empty"><b>Configura filtros y busca facturas</b><span>Deja fechas vacías para consultar todo el histórico del RFC o núcleo elegido.</span></section> : null}
+    {searchError ? <section className="api-error" role="alert"><span>{searchError}</span><button disabled={loading} onClick={() => search(lastSearch?.offset ?? 0, lastSearch?.append ?? false)} type="button">Reintentar</button></section> : null}
+    {rows.length ? <section aria-busy={loading || undefined} className={`api-results${replacing ? " is-refreshing" : ""}`}>
+      <div className="api-results-toolbar"><div><p>Resultados cargados</p><h2>{rows.length} factura{rows.length === 1 ? "" : "s"}</h2></div></div>
+      <div className="api-table-wrap"><table><thead><tr><th><input aria-label="Seleccionar todas las facturas cargadas" checked={rows.length > 0 && selected.size === rows.length} onChange={(event) => setSelected(event.target.checked ? new Set(rows.map((row) => row.uuid)) : new Set())} type="checkbox" /></th><th>Fecha</th><th>Proveedor / RFC</th><th>Folio</th><th>Total</th><th>Núcleos</th><th>Nombre PDF</th><th>Nombre XML</th></tr></thead><tbody>{rows.map((row) => <tr key={row.uuid}><td><input aria-label={`Seleccionar factura ${row.uuid}`} checked={selected.has(row.uuid)} onChange={(event) => setSelected((current) => { const next = new Set(current); event.target.checked ? next.add(row.uuid) : next.delete(row.uuid); return next; })} type="checkbox" /></td><td>{displayDate(row.fecha)}</td><td><strong>{row.nombre_emisor || "—"}</strong><small>{row.rfc_emisor || "—"}</small></td><td>{row.serie || ""}{row.folio || "—"}</td><td>{row.total == null ? "—" : `${moneyFormatter.format(row.total)} ${row.moneda && row.moneda !== "MXN" ? row.moneda : ""}`}</td><td>{row.nucleos.length ? row.nucleos.join(" · ") : "Sin núcleo confirmado"}</td><td><input aria-label={`Nombre PDF de ${row.uuid}`} onChange={(event) => setNames({ ...names, [row.uuid]: { ...names[row.uuid], pdf: event.target.value } })} value={names[row.uuid]?.pdf ?? defaultName(row, ".pdf")} /></td><td><input aria-label={`Nombre XML de ${row.uuid}`} onChange={(event) => setNames({ ...names, [row.uuid]: { ...names[row.uuid], xml: event.target.value } })} value={names[row.uuid]?.xml ?? defaultName(row, ".xml")} /></td></tr>)}{appending ? <TableLoadingRows /> : null}</tbody></table>{replacing ? <div className="api-results-refresh" role="status"><span aria-hidden="true" className="api-inline-spinner" />Actualizando resultados…</div> : null}</div>
+      {selectedRows.length ? <aside aria-label="Descarga de facturas seleccionadas" className="api-selection-bar"><strong>{selectedRows.length} factura{selectedRows.length === 1 ? "" : "s"} seleccionada{selectedRows.length === 1 ? "" : "s"}</strong><div className="api-download-controls">{(Object.keys(documents) as FacturaDocumentType[]).map((document) => <label key={document}><span>{document === "metadata" ? "Metadata" : document.toUpperCase()}</span><input checked={documents[document]} disabled={downloading || loading} onChange={() => setDocuments({ ...documents, [document]: !documents[document] })} role="switch" type="checkbox" /><b>{documents[document] ? "Incluir" : "No incluir"}</b></label>)}<button className="hydro-button api-download-button" disabled={!enabledDocuments.length || downloading || loading} onClick={download} type="button">{downloading ? <><span aria-hidden="true" className="api-inline-spinner" />Preparando ZIP…</> : `Descargar ZIP (${selectedRows.length})`}</button></div>{downloadError ? <p role="alert"><span>{downloadError}</span><button disabled={downloading} onClick={download} type="button">Reintentar descarga</button></p> : null}</aside> : null}
+      {hasMore ? <div className="api-load-more"><button disabled={loading} onClick={() => search(offset, true)} type="button">{appending ? "Cargando más…" : "Cargar más"}</button></div> : null}
+    </section> : loading ? <ResultsSkeleton /> : <section className="api-empty"><b>Busca facturas para empezar</b><span>Los filtros son opcionales.</span></section>}
+
+    {downloadStarted ? <div className="api-toast" role="status">La descarga ha comenzado.</div> : null}
 
     {terminalOpen ? <div aria-labelledby="api-terminal-title" aria-modal="true" className="manual-modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setTerminalOpen(false); }} role="dialog"><article className="api-terminal-modal"><header><div><p>Integración externa</p><h2 id="api-terminal-title">Guía de petición por terminal</h2><span>Usa una key autorizada en tus propios sistemas; esta página no muestra ni conserva la key.</span></div><button aria-label="Cerrar guía" onClick={() => setTerminalOpen(false)} type="button">×</button></header><div className="api-terminal-modal-body"><section><h3>1. Buscar facturas</h3><p>Los filtros son opcionales. Repite <code>rfc_emisor</code> o <code>nucleo</code> para combinar varios valores; cada grupo se combina con los demás filtros.</p><pre>{`curl -H "x-api-key: TU_API_KEY" "${terminalQuery}"`}</pre></section><section><h3>2. Continuar una búsqueda</h3><p>La respuesta contiene hasta 100 facturas. Incrementa <code>offset</code> para pedir la página siguiente.</p><pre>{`curl -H "x-api-key: TU_API_KEY" "${apiUrl}/v1/facturas?limit=100&offset=100"`}</pre></section><section><h3>3. Descargar documentos</h3><p>Sustituye <code>{"{UUID}"}</code> por el UUID recibido en la búsqueda. <code>-OJ</code> conserva el nombre sugerido por el servidor.</p><pre>{`curl -H "x-api-key: TU_API_KEY" "${apiUrl}/v1/facturas/{UUID}"
 

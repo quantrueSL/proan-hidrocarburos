@@ -45,11 +45,12 @@ CREATE TABLE IF NOT EXISTS `proan-quantrue.D60_REPORTING.HCARB_gold_aprobacion` 
   ceco_por_ticket STRING
 );
 
--- Quién escribe cada transición (todo en aprobacion_engine.py):
+-- Quién escribe cada transición:
 --
---   sync_pendientes()   (sin fila) -> pendiente_validacion_compras
---                        INSERT anti-join contra HCARB_GOLD_CLASIFICACION_FOLIO;
---                        se llama en cada carga de la cola de Compras, idempotente.
+--   hcarb_sync_pendientes (Airflow)
+--                        (sin fila) -> pendiente_validacion_compras
+--                        MERGE contra HCARB_GOLD_CLASIFICACION_FOLIO, diario
+--                        después de la clasificación.
 --   capturar_compras()  pendiente_validacion_compras -> pendiente_aprobacion_gerencia
 --                        Compras captura CECO (siempre manual) y opcionalmente el
 --                        sitio (solo si M2 no lo dedujo). Si la factura reparte
