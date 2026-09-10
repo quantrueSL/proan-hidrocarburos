@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 import logging
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Literal
+from typing import Any, Callable, Literal, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -31,8 +32,14 @@ from financialbi.dashboard_engine import facturas_sat_atencion as dashboard_fact
 from financialbi.dashboard_engine import facturas_detalle as dashboard_facturas_detalle
 from financialbi.dashboard_engine import resumen_completo as dashboard_resumen_completo
 from financialbi.estatus_sat import ensure_schema as ensure_estatus_sat_schema
+from financialbi.cache import TTLCache
 
 log = logging.getLogger(__name__)
+
+T = TypeVar("T")
+
+_catalog_cache = TTLCache(name="catalog", max_entries=16, ttl_seconds=60 * 60)
+_dashboard_cache = TTLCache(name="dashboard", max_entries=128, ttl_seconds=5 * 60)
 
 app = FastAPI(title="FinancialBI", version="0.1.0")
 
@@ -163,6 +170,30 @@ def _to_jsonable(value: Any) -> Any:
     return str(value)
 
 
+def _cached_response(cache: TTLCache, key: str, loader: Callable[[], T]) -> T:
+    result = cache.get_or_load(key, loader)
+    log.info(
+        "cache namespace=%s outcome=%s age_seconds=%.3f",
+        cache.name,
+        "hit" if result.hit else "miss",
+        result.age_seconds,
+    )
+    return result.value
+
+
+def _dashboard_cache_key(filtros: DashboardFiltros) -> str:
+    values = filtros.model_dump(mode="json", exclude={"detalle", "detalle_sat"})
+    return json.dumps(values, sort_keys=True, separators=(",", ":"))
+
+
+def _invalidate_after_approval() -> None:
+    # Los cambios de aprobación afectan al resumen; CECO/sitios pueden haber
+    # sido capturados manualmente. Limpiar el pequeño catálogo completo evita
+    # mantener variantes antiguas y no añade coste operativo.
+    _dashboard_cache.clear()
+    _catalog_cache.clear()
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -171,7 +202,11 @@ def health() -> dict[str, str]:
 @app.get("/v1/financialbi/hidrocarburos/catalog")
 def financial_hidrocarburos_catalog() -> dict[str, Any]:
     try:
-        return _to_jsonable(hidrocarburos_catalog())
+        return _cached_response(
+            _catalog_cache,
+            "hidrocarburos",
+            lambda: _to_jsonable(hidrocarburos_catalog()),
+        )
     except Exception as exc:
         log.exception("hydrocarburos catalog error")
         raise HTTPException(status_code=500, detail=str(exc))
@@ -260,7 +295,11 @@ def financial_aprobacion_historial(filtros: AprobacionSearch = Depends()) -> dic
 @app.get("/v1/financialbi/hidrocarburos/aprobacion/catalogo/ceco")
 def financial_aprobacion_catalogo_ceco() -> dict[str, Any]:
     try:
-        return {"rows": _to_jsonable(catalogo_ceco())}
+        return _cached_response(
+            _catalog_cache,
+            "aprobacion_ceco",
+            lambda: {"rows": _to_jsonable(catalogo_ceco())},
+        )
     except Exception as exc:
         log.exception("aprobacion catalogo ceco error")
         raise HTTPException(status_code=500, detail=str(exc))
@@ -269,7 +308,11 @@ def financial_aprobacion_catalogo_ceco() -> dict[str, Any]:
 @app.get("/v1/financialbi/hidrocarburos/aprobacion/catalogo/sitios")
 def financial_aprobacion_catalogo_sitios() -> dict[str, Any]:
     try:
-        return {"rows": _to_jsonable(catalogo_sitios())}
+        return _cached_response(
+            _catalog_cache,
+            "aprobacion_sitios",
+            lambda: {"rows": _to_jsonable(catalogo_sitios())},
+        )
     except Exception as exc:
         log.exception("aprobacion catalogo sitios error")
         raise HTTPException(status_code=500, detail=str(exc))
@@ -278,7 +321,11 @@ def financial_aprobacion_catalogo_sitios() -> dict[str, Any]:
 @app.get("/v1/financialbi/hidrocarburos/aprobacion/catalogo/nucleo")
 def financial_aprobacion_catalogo_nucleo() -> dict[str, Any]:
     try:
-        return {"rows": _to_jsonable(catalogo_nucleo())}
+        return _cached_response(
+            _catalog_cache,
+            "aprobacion_nucleo",
+            lambda: {"rows": _to_jsonable(catalogo_nucleo())},
+        )
     except Exception as exc:
         log.exception("aprobacion catalogo nucleo error")
         raise HTTPException(status_code=500, detail=str(exc))
@@ -289,6 +336,7 @@ def financial_aprobacion_validar_compras(uuid: str, body: CapturarCompraBody) ->
     try:
         result = capturar_compras(uuid=uuid, **body.model_dump())
         _raise_if_not_ok(result)
+        _invalidate_after_approval()
         return {"ok": True, "estado": result["estado_actual"]}
     except HTTPException:
         raise
@@ -302,6 +350,7 @@ def financial_aprobacion_rechazar_compras(uuid: str, body: RechazarBody) -> dict
     try:
         result = rechazar_aprobacion(uuid=uuid, rol="compras", **body.model_dump())
         _raise_if_not_ok(result)
+        _invalidate_after_approval()
         return {"ok": True, "estado": result["estado_actual"]}
     except HTTPException:
         raise
@@ -315,6 +364,7 @@ def financial_aprobacion_aprobar_gerencia(uuid: str, body: AprobarBody) -> dict[
     try:
         result = aprobar_gerencia(uuid=uuid, **body.model_dump())
         _raise_if_not_ok(result)
+        _invalidate_after_approval()
         return {"ok": True, "estado": result["estado_actual"]}
     except HTTPException:
         raise
@@ -328,6 +378,7 @@ def financial_aprobacion_rechazar_gerencia(uuid: str, body: RechazarBody) -> dic
     try:
         result = rechazar_aprobacion(uuid=uuid, rol="gerencia", **body.model_dump())
         _raise_if_not_ok(result)
+        _invalidate_after_approval()
         return {"ok": True, "estado": result["estado_actual"]}
     except HTTPException:
         raise
@@ -344,6 +395,7 @@ def financial_aprobacion_reabrir(uuid: str, body: ReabrirBody) -> dict[str, Any]
     try:
         result = reabrir_aprobacion(uuid=uuid, **body.model_dump())
         _raise_if_not_ok(result)
+        _invalidate_after_approval()
         return {"ok": True, "estado": result["estado_actual"]}
     except HTTPException:
         raise
@@ -364,7 +416,11 @@ def financial_dashboard(filtros: DashboardFiltros = Depends()) -> dict[str, Any]
             return _to_jsonable(dashboard_facturas_sat_atencion(**values))
         if detalle:
             return _to_jsonable(dashboard_facturas_detalle(**values))
-        return _to_jsonable(dashboard_resumen_completo(**values))
+        return _cached_response(
+            _dashboard_cache,
+            _dashboard_cache_key(filtros),
+            lambda: _to_jsonable(dashboard_resumen_completo(**values)),
+        )
     except Exception as exc:
         log.exception("dashboard error")
         raise HTTPException(status_code=500, detail=str(exc))
