@@ -24,7 +24,7 @@ type ProanAuthenticatedShellProps = {
 
 type NavItem = {
   href: string;
-  key: "manual" | "hydrocarburos-m1" | "compras" | "gerencia" | "dashboard";
+  key: "manual" | "hydrocarburos-m1" | "compras" | "gerencia" | "dashboard" | "api";
   label: string;
 };
 
@@ -78,7 +78,8 @@ export function ProanAuthenticatedShell({
         ...(canAccessAprobacion(session)
           ? [{ href: "/aprobacion", key: "gerencia", label: "Aprobación" } as NavItem]
           : []),
-        { href: "/dashboard", key: "dashboard", label: "Dashboard" }
+        { href: "/dashboard", key: "dashboard", label: "Dashboard" },
+        { href: "/api", key: "api", label: "API" }
       ]
     : [];
 

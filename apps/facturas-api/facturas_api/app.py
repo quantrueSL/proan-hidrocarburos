@@ -102,12 +102,14 @@ def health() -> dict[str, str]:
 
 @app.get("/v1/facturas", response_model=list[FacturaMetadata])
 def buscar_facturas(
-    rfc_emisor: str | None = Query(default=None),
+    rfc_emisor: list[str] | None = Query(default=None),
     serie: str | None = Query(default=None),
     folio: str | None = Query(default=None),
     fecha_desde: date | None = Query(default=None),
     fecha_hasta: date | None = Query(default=None),
-    nucleo: str | None = Query(default=None),
+    nucleo: list[str] | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ) -> list[FacturaMetadata]:
     if fecha_desde and fecha_hasta and fecha_desde > fecha_hasta:
         raise _error(400, "parametros_invalidos", "fecha_desde no puede ser posterior a fecha_hasta.")
@@ -119,6 +121,8 @@ def buscar_facturas(
             fecha_desde=fecha_desde.isoformat() if fecha_desde else None,
             fecha_hasta=fecha_hasta.isoformat() if fecha_hasta else None,
             nucleo=nucleo,
+            limit=limit,
+            offset=offset,
         )
     except Exception as exc:
         log.exception("facturas search error")

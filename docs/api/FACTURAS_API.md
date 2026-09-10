@@ -127,7 +127,7 @@ algo existe fuera del alcance de gas).
 | `GET /v1/facturas/{uuid}` | Metadata: proveedor, folio, importe, estatus de cancelación SAT, links a XML/PDF |
 | `GET /v1/facturas/{uuid}/xml` | El XML reconstruido |
 | `GET /v1/facturas/{uuid}/pdf` | El PDF (representación impresa, con QR); marca "CANCELADO" si aplica |
-| `GET /v1/facturas?rfc_emisor=&serie=&folio=&fecha_desde=&fecha_hasta=&nucleo=` | Búsqueda opcional por RFC emisor, identificador "humano", fechas y núcleo — puede devolver varias coincidencias |
+| `GET /v1/facturas?rfc_emisor=&serie=&folio=&fecha_desde=&fecha_hasta=&nucleo=&limit=&offset=` | Búsqueda opcional por RFC emisor, identificador "humano", fechas y núcleo — puede devolver varias coincidencias |
 | `GET /health` | Estado del servicio |
 
 La metadata **no incluye CECO ni el estado del flujo de aprobación interno**
@@ -140,6 +140,12 @@ asociación se deriva del CECO de aprobación/SAP y, si existe, de los CECO del
 reparto por ticket; solo cuenta una relación CECO→núcleo confirmada. Las
 respuestas de metadata y búsqueda incluyen `nucleos`, una lista ordenada de
 los nombres confirmados asociados a la factura.
+
+`rfc_emisor` y `nucleo` se pueden repetir para buscar cualquiera de varios
+valores (por ejemplo, `rfc_emisor=AAA&rfc_emisor=BBB`). Los grupos de filtros
+se combinan entre sí con AND. La respuesta conserva su formato de lista;
+`limit` (por defecto y máximo 100) y `offset` permiten recuperar páginas
+adicionales sin omitir facturas.
 
 Catálogo de errores (`{"error": "...", "detail": "..."}`):
 

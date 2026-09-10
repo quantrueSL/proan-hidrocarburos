@@ -10,7 +10,7 @@ export type HydrocarburosFilters = {
 };
 
 export type HydrocarburosSearchRequest = HydrocarburosFilters & { page?: number; page_size?: number };
-export type HydrocarburosOption = { id: string; nombre: string };
+export type HydrocarburosOption = { id: string; nombre: string; rfcs?: string[] };
 export type HydrocarburosCatalog = {
   fecha_minima: string | null;
   fecha_maxima: string | null;

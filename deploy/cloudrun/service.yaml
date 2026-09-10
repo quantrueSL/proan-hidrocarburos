@@ -39,6 +39,15 @@ spec:
           env:
             - name: FINANCIALBI_SERVICE_URL
               value: http://localhost:8091
+            # La URL es pública, pero la key se queda en Secret Manager y solo
+            # las rutas de servidor de Next.js la adjuntan al Gateway.
+            - name: FACTURAS_API_URL
+              value: https://plataforma-hidrocarburos-facturas-gw-3h14pa0v.wn.gateway.dev
+            - name: FACTURAS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: hcarb-facturas-api-key
+                  key: latest
             - name: SESSION_COOKIE_SECURE
               value: "true"
             - name: SESSION_COOKIE_NAME

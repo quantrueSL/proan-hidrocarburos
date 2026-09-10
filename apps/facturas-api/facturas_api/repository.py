@@ -107,12 +107,14 @@ def get_factura_metadata(uuid: str) -> dict[str, Any] | None:
 
 def buscar_facturas(
     *,
-    rfc_emisor: str | None,
+    rfc_emisor: list[str] | None,
     serie: str | None,
     folio: str | None,
     fecha_desde: str | None,
     fecha_hasta: str | None,
-    nucleo: str | None,
+    nucleo: list[str] | None,
+    limit: int = 100,
+    offset: int = 0,
 ) -> list[dict[str, Any]]:
     """Búsqueda por el identificador "humano" (RFC emisor + Serie + Folio),
     con rango de fecha opcional -- ver docs/data/naturaleza-de-los-datos.md sobre
@@ -123,8 +125,8 @@ def buscar_facturas(
     params: list[bigquery.ScalarQueryParameter] = []
 
     if rfc_emisor:
-        clauses.append("c.EmisorRfc = @rfc_emisor")
-        params.append(bigquery.ScalarQueryParameter("rfc_emisor", "STRING", rfc_emisor))
+        clauses.append("c.EmisorRfc IN UNNEST(@rfc_emisor)")
+        params.append(bigquery.ArrayQueryParameter("rfc_emisor", "STRING", rfc_emisor))
     if serie:
         clauses.append("c.Serie = @serie")
         params.append(bigquery.ScalarQueryParameter("serie", "STRING", serie))
@@ -145,7 +147,7 @@ def buscar_facturas(
         # único (aprobación/SAP) o de cualquiera de los CECO por ticket.
         # EXISTS evita multiplicar facturas cuando el reparto tiene varios CECO.
         clauses.append(f"""(
-          nuc.nucleo = @nucleo
+          nuc.nucleo IN UNNEST(@nucleo)
           OR EXISTS (
             SELECT 1
             FROM UNNEST(JSON_EXTRACT_ARRAY(a.ceco_por_ticket)) AS ticket_json
@@ -153,10 +155,10 @@ def buscar_facturas(
               ON nuc_ticket.ceco = JSON_VALUE(ticket_json, '$.ceco')
               AND nuc_ticket.estado_identificacion_ceco = 'confirmado'
               AND nuc_ticket.estado_asignacion_nucleo = 'confirmada'
-            WHERE nuc_ticket.nucleo = @nucleo
+            WHERE nuc_ticket.nucleo IN UNNEST(@nucleo)
           )
         )""")
-        params.append(bigquery.ScalarQueryParameter("nucleo", "STRING", nucleo))
+        params.append(bigquery.ArrayQueryParameter("nucleo", "STRING", nucleo))
 
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     query = f"""
@@ -164,8 +166,13 @@ def buscar_facturas(
       {_METADATA_JOINS}
       {where}
       ORDER BY c.Fecha DESC
-      LIMIT 100
+      LIMIT @limit
+      OFFSET @offset
     """
+    params.extend([
+        bigquery.ScalarQueryParameter("limit", "INT64", limit),
+        bigquery.ScalarQueryParameter("offset", "INT64", offset),
+    ])
     return _rows(query, params)
 
 

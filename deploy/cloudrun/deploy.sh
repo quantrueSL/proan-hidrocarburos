@@ -3,7 +3,8 @@
 #
 #   bash deploy/cloudrun/deploy.sh
 #
-# Requiere que existan los secretos carb-session-secret y carb-htpasswd; ver
+# Requiere que existan los secretos carb-session-secret, carb-htpasswd y
+# hcarb-facturas-api-key; ver
 # deploy/cloudrun/README.md para crearlos la primera vez.
 #
 # OJO: no metas comentarios entre las lineas de un comando encadenado con "\".
@@ -25,7 +26,7 @@ cd "$ROOT"
 TAG="$(git rev-parse --short HEAD 2>/dev/null || echo nogit)-$(date +%Y%m%d-%H%M%S)"
 
 echo "== Comprobando secretos =="
-for secret in carb-session-secret carb-htpasswd; do
+for secret in carb-session-secret carb-htpasswd hcarb-facturas-api-key; do
   if ! gcloud secrets describe "$secret" --project="$PROJECT" >/dev/null 2>&1; then
     echo "ERROR: falta el secreto '$secret'." >&2
     echo "       Crealo siguiendo deploy/cloudrun/README.md antes de desplegar." >&2

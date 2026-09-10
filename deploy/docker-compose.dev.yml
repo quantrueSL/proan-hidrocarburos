@@ -53,6 +53,10 @@ services:
       - carb-financialbi-dev
     environment:
       - FINANCIALBI_SERVICE_URL=http://carb-financialbi-dev:8091
+      # Se leen del entorno local; no se guardan en este archivo ni se exponen
+      # al navegador. Sin key, la pestaña API responde con un error controlado.
+      - FACTURAS_API_URL=${FACTURAS_API_URL:-https://plataforma-hidrocarburos-facturas-gw-3h14pa0v.wn.gateway.dev}
+      - FACTURAS_API_KEY
       - HTPASSWD_PATH=/etc/carb/.htpasswd
       - SESSION_COOKIE_NAME=carb_session
       - SESSION_COOKIE_SECURE=false

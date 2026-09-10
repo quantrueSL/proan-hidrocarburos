@@ -44,7 +44,10 @@ paths:
       parameters:
         - name: rfc_emisor
           in: query
-          type: string
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
         - name: serie
           in: query
           type: string
@@ -61,8 +64,22 @@ paths:
           format: date
         - name: nucleo
           in: query
-          type: string
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
           description: Nombre exacto del núcleo operativo; no es un identificador estable.
+        - name: limit
+          in: query
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 100
+        - name: offset
+          in: query
+          type: integer
+          minimum: 0
+          default: 0
       responses:
         "200":
           description: Lista de facturas coincidentes (puede ser vacía)

@@ -14,11 +14,19 @@ una sesión sin firmar sería falsificable.
 
 ```bash
 openssl rand -base64 48 | tr -d '\n' | \
-  gcloud secrets create carb-session-secret --data-file=- \
+gcloud secrets create carb-session-secret --data-file=- \
     --project=proan-quantrue --replication-policy=automatic
 ```
 
-**2. Usuarios técnicos (`.htpasswd`).** Se sube como secreto y se monta como
+**2. API key de Facturas API.** Guarda la key ya restringida al Gateway como
+`hcarb-facturas-api-key`; no la
+añadas al repositorio ni a una variable `NEXT_PUBLIC_`:
+
+```bash
+gcloud secrets create hcarb-facturas-api-key --data-file=- --project=proan-quantrue
+```
+
+**3. Usuarios técnicos (`.htpasswd`).** Se sube como secreto y se monta como
 fichero en `/etc/carb/.htpasswd`; así los hashes no viven en el repositorio ni se
 hornean en la imagen.
 
@@ -27,10 +35,10 @@ gcloud secrets create carb-htpasswd --data-file=deploy/nginx/.htpasswd \
   --project=proan-quantrue --replication-policy=automatic
 ```
 
-**3. Permiso de lectura de secretos** para la identidad del servicio:
+**4. Permiso de lectura de secretos** para la identidad del servicio:
 
 ```bash
-for s in carb-session-secret carb-htpasswd; do
+for s in carb-session-secret carb-htpasswd hcarb-facturas-api-key; do
   gcloud secrets add-iam-policy-binding "$s" \
     --member=serviceAccount:272166156031-compute@developer.gserviceaccount.com \
     --role=roles/secretmanager.secretAccessor --project=proan-quantrue

@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "archiver": "7.0.1",
     "bcryptjs": "^2.4.3",
     "firebase": "^12.16.0",
     "firebase-admin": "^14.2.0",
@@ -19,6 +20,7 @@
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@types/archiver": "6.0.2",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.14.0",
     "@types/react": "^18.3.0",

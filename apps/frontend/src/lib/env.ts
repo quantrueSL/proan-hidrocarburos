@@ -10,6 +10,20 @@ export function getFinancialbiServiceUrl(): string {
   return readEnv("FINANCIALBI_SERVICE_URL", "http://localhost:8091");
 }
 
+/** URL pública del Gateway de facturas. Solo se consume desde rutas de servidor. */
+export function getFacturasApiUrl(): string {
+  const url = process.env.FACTURAS_API_URL?.trim() ?? "";
+  if (!url) throw new Error("FACTURAS_API_URL no está configurada.");
+  return url.replace(/\/$/, "");
+}
+
+/** API key privada: nunca debe importarse ni enviarse al navegador. */
+export function getFacturasApiKey(): string {
+  const key = process.env.FACTURAS_API_KEY?.trim() ?? "";
+  if (!key) throw new Error("FACTURAS_API_KEY no está configurada.");
+  return key;
+}
+
 /** Ruta al fichero .htpasswd usado para autenticar el login. */
 export function getHtpasswdPath(): string {
   return readEnv("HTPASSWD_PATH", "/app/.htpasswd");

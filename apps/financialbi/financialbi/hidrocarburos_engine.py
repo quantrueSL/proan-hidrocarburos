@@ -97,6 +97,7 @@ def catalog() -> dict[str, Any]:
         SELECT
           DATE(f.fecha) AS fecha,
           f.id_proveedor,
+          f.emisor_rfc,
           COALESCE(v.razon_social, f.emisor_rfc) AS proveedor,
           s.werks,
           s.sitio_consumo
@@ -106,8 +107,13 @@ def catalog() -> dict[str, Any]:
         MIN(fecha) AS fecha_minima,
         MAX(fecha) AS fecha_maxima,
         ARRAY(
-          SELECT AS STRUCT id_proveedor AS id, proveedor AS nombre
-          FROM (SELECT DISTINCT id_proveedor, proveedor FROM base WHERE id_proveedor IS NOT NULL)
+          SELECT AS STRUCT
+            id_proveedor AS id,
+            ANY_VALUE(proveedor) AS nombre,
+            ARRAY_AGG(DISTINCT emisor_rfc IGNORE NULLS ORDER BY emisor_rfc) AS rfcs
+          FROM base
+          WHERE id_proveedor IS NOT NULL
+          GROUP BY id_proveedor
           ORDER BY nombre
         ) AS proveedores,
         ARRAY(
