@@ -1,0 +1,29 @@
+{
+  "displayName": "Hidrocarburos: fallo del DAG diario",
+  "documentation": {
+    "content": "La ejecución programada del DAG proan_produccion ha terminado en estado failed. Las ejecuciones temporales quedan excluidas.",
+    "mimeType": "text/markdown"
+  },
+  "conditions": [
+    {
+      "displayName": "Al menos un fallo final del DAG diario",
+      "conditionThreshold": {
+        "filter": "metric.type=\"logging.googleapis.com/user/hcarb_proan_produccion_scheduled_failures\" AND resource.type=\"cloud_composer_environment\" AND resource.label.\"environment_name\"=\"proan-quantrue\"",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 0,
+        "duration": "0s",
+        "aggregations": [
+          {
+            "alignmentPeriod": "3600s",
+            "perSeriesAligner": "ALIGN_SUM"
+          }
+        ]
+      }
+    }
+  ],
+  "combiner": "OR",
+  "enabled": true,
+  "notificationChannels": [
+    "projects/proan-quantrue/notificationChannels/3649013913564637506"
+  ]
+}

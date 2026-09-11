@@ -28,6 +28,7 @@ from google.cloud import bigquery
 
 from financialbi.aprobacion_engine import _APROBACION, _CECO_CATALOGO, _NUCLEO
 from financialbi.db import get_bq_client
+from financialbi.observability import submit_with_request_context
 from financialbi.hidrocarburos_engine import _FOLIO, _SAP, _VENDORS
 
 _ESTATUS_SAT = "`proan-quantrue.D60_REPORTING.HCARB_ESTATUS_SAT`"
@@ -575,12 +576,12 @@ def resumen_completo(
     # aunque el resultado esté cacheado. Son bloques independientes y el cliente
     # compartido es seguro entre hilos, así que se ejecutan concurrentemente.
     with ThreadPoolExecutor(max_workers=6) as executor:
-        resumen_future = executor.submit(_resumen_estatus, where, params)
-        proveedor_future = executor.submit(_gasto_por_proveedor, where, params)
-        sitio_future = executor.submit(_gasto_por_sitio, where, params)
-        ceco_future = executor.submit(_gasto_por_ceco, where, params)
-        nucleo_future = executor.submit(_gasto_por_nucleo, where, params)
-        periodo_future = executor.submit(_gasto_por_periodo, where, params)
+        resumen_future = submit_with_request_context(executor, _resumen_estatus, where, params)
+        proveedor_future = submit_with_request_context(executor, _gasto_por_proveedor, where, params)
+        sitio_future = submit_with_request_context(executor, _gasto_por_sitio, where, params)
+        ceco_future = submit_with_request_context(executor, _gasto_por_ceco, where, params)
+        nucleo_future = submit_with_request_context(executor, _gasto_por_nucleo, where, params)
+        periodo_future = submit_with_request_context(executor, _gasto_por_periodo, where, params)
 
     return {
         "resumen": resumen_future.result(),

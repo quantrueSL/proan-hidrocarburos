@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import os
 
+from financialbi.observability import ObservedBigQueryClient
+
 _bq_client = None  # cacheado a nivel de modulo -- ver comentario en get_bq_client
 
 
@@ -50,7 +52,9 @@ def get_bq_client():
             creds_path,
             scopes=["https://www.googleapis.com/auth/cloud-platform"],
         )
-        _bq_client = bigquery.Client(project=project_id, credentials=credentials, location=location)
+        _bq_client = ObservedBigQueryClient(
+            bigquery.Client(project=project_id, credentials=credentials, location=location)
+        )
     else:
-        _bq_client = bigquery.Client(project=project_id, location=location)
+        _bq_client = ObservedBigQueryClient(bigquery.Client(project=project_id, location=location))
     return _bq_client

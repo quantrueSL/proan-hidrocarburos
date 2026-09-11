@@ -33,6 +33,7 @@ from financialbi.dashboard_engine import facturas_detalle as dashboard_facturas_
 from financialbi.dashboard_engine import resumen_completo as dashboard_resumen_completo
 from financialbi.estatus_sat import ensure_schema as ensure_estatus_sat_schema
 from financialbi.cache import TTLCache
+from financialbi.observability import ObservedRoute, emit_event
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ _catalog_cache = TTLCache(name="catalog", max_entries=16, ttl_seconds=60 * 60)
 _dashboard_cache = TTLCache(name="dashboard", max_entries=128, ttl_seconds=5 * 60)
 
 app = FastAPI(title="FinancialBI", version="0.1.0")
+app.router.route_class = ObservedRoute
 
 
 @app.on_event("startup")
@@ -49,6 +51,7 @@ def _startup() -> None:
     # Idempotente -- CREATE TABLE IF NOT EXISTS, seguro llamarlo en cada arranque.
     ensure_aprobacion_schema()
     ensure_estatus_sat_schema()
+    emit_event("service_started")
 
 
 class HydrocarburosFilters(BaseModel):
@@ -172,11 +175,11 @@ def _to_jsonable(value: Any) -> Any:
 
 def _cached_response(cache: TTLCache, key: str, loader: Callable[[], T]) -> T:
     result = cache.get_or_load(key, loader)
-    log.info(
-        "cache namespace=%s outcome=%s age_seconds=%.3f",
-        cache.name,
-        "hit" if result.hit else "miss",
-        result.age_seconds,
+    emit_event(
+        "cache",
+        namespace=cache.name,
+        outcome="hit" if result.hit else "miss",
+        age_seconds=round(result.age_seconds, 3),
     )
     return result.value
 

@@ -22,6 +22,7 @@ from typing import Any, Literal
 from google.cloud import bigquery
 
 from financialbi.db import get_bq_client
+from financialbi.observability import submit_with_request_context
 from financialbi.hidrocarburos_engine import _FOLIO, _SAP, _VENDORS
 
 # HCARB_APROBACION_TABLE (mismo patron que HCARB_FOLIO_TABLE/HCARB_SAP_TABLE en
@@ -249,8 +250,8 @@ def _paginar_cola(
       {from_clause}
     """
     with ThreadPoolExecutor(max_workers=2) as executor:
-        resumen_future = executor.submit(_rows, resumen_query, params)
-        rows_future = executor.submit(_rows, query, query_params)
+        resumen_future = submit_with_request_context(executor, _rows, resumen_query, params)
+        rows_future = submit_with_request_context(executor, _rows, query, query_params)
         resumen_rows = resumen_future.result()
         rows = _parse_ceco_por_ticket(rows_future.result())
     resumen = resumen_rows[0] if resumen_rows else {"total": 0, "importe_gas_total": 0, "validadas_sap": 0, "con_mseg": 0}

@@ -1,0 +1,29 @@
+{
+  "displayName": "Hidrocarburos: latencia p95 elevada en Cloud Run",
+  "documentation": {
+    "content": "La latencia p95 del portal plataforma-hidrocarburos supera 15 segundos durante diez minutos.",
+    "mimeType": "text/markdown"
+  },
+  "conditions": [
+    {
+      "displayName": "p95 superior a 15 segundos durante diez minutos",
+      "conditionThreshold": {
+        "filter": "metric.type=\"run.googleapis.com/request_latencies\" AND resource.type=\"cloud_run_revision\" AND resource.label.\"service_name\"=\"plataforma-hidrocarburos\"",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 15,
+        "duration": "600s",
+        "aggregations": [
+          {
+            "alignmentPeriod": "600s",
+            "perSeriesAligner": "ALIGN_PERCENTILE_95"
+          }
+        ]
+      }
+    }
+  ],
+  "combiner": "OR",
+  "enabled": true,
+  "notificationChannels": [
+    "projects/proan-quantrue/notificationChannels/3649013913564637506"
+  ]
+}

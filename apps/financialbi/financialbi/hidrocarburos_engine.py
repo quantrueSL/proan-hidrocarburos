@@ -10,6 +10,7 @@ from typing import Any, Literal
 from google.cloud import bigquery
 
 from financialbi.db import get_bq_client
+from financialbi.observability import submit_with_request_context
 
 # HCARB_FOLIO_TABLE permite apuntar a una tabla alterna (p.ej. un
 # HCARB_GOLD_CLASIFICACION_FOLIO_fer de prueba) sin tocar la de producción --
@@ -174,8 +175,8 @@ def search(*, page: int, page_size: int, **filters: Any) -> dict[str, Any]:
     count_query = f"SELECT COUNT(*) AS total {_base_query()} WHERE {where}"
     count_params = params[:-2]
     with ThreadPoolExecutor(max_workers=2) as executor:
-        total_future = executor.submit(_rows, count_query, count_params)
-        rows_future = executor.submit(_rows, query, params)
+        total_future = submit_with_request_context(executor, _rows, count_query, count_params)
+        rows_future = submit_with_request_context(executor, _rows, query, params)
         total_rows = total_future.result()
         rows = rows_future.result()
     return {"total": total_rows[0]["total"] if total_rows else 0, "page": page, "page_size": page_size, "rows": rows}

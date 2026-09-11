@@ -1,0 +1,4 @@
+{
+  "description": "Fallos finales de ejecuciones programadas de proan_produccion.",
+  "filter": "resource.type=\"cloud_composer_environment\" AND resource.labels.environment_name=\"proan-quantrue\" AND logName=\"projects/proan-quantrue/logs/airflow-scheduler\" AND textPayload:\"DagRun\" AND textPayload:\"proan_produccion\" AND textPayload:\"scheduled__\" AND textPayload:\"state=failed\""
+}

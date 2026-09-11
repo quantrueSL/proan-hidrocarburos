@@ -1,0 +1,29 @@
+{
+  "displayName": "Hidrocarburos: error 5xx en Cloud Run",
+  "documentation": {
+    "content": "El portal plataforma-hidrocarburos ha devuelto al menos un error 5xx en los últimos cinco minutos.",
+    "mimeType": "text/markdown"
+  },
+  "conditions": [
+    {
+      "displayName": "Al menos un 5xx en cinco minutos",
+      "conditionThreshold": {
+        "filter": "metric.type=\"run.googleapis.com/request_count\" AND resource.type=\"cloud_run_revision\" AND resource.label.\"service_name\"=\"plataforma-hidrocarburos\" AND metric.label.\"response_code_class\"=\"5xx\"",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 0,
+        "duration": "0s",
+        "aggregations": [
+          {
+            "alignmentPeriod": "300s",
+            "perSeriesAligner": "ALIGN_SUM"
+          }
+        ]
+      }
+    }
+  ],
+  "combiner": "OR",
+  "enabled": true,
+  "notificationChannels": [
+    "projects/proan-quantrue/notificationChannels/3649013913564637506"
+  ]
+}
