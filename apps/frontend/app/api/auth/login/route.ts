@@ -1,6 +1,12 @@
 import { readFile } from "node:fs/promises";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
+import {
+  consumeLoginAttempt,
+  getClientAddress,
+  getLoginRateLimitKey,
+  resetLoginAttempts
+} from "@/lib/auth/login-rate-limit";
 import { clearSession, setSession } from "@/lib/auth/session";
 import { getHtpasswdPath, getSessionTtlSeconds } from "@/lib/env";
 import { getDefaultAuthenticatedRoute } from "../../../../client.config";
@@ -77,9 +83,27 @@ export async function POST(request: Request) {
     );
   }
 
+  // Se reserva antes de bcrypt, que es la operación costosa que queremos proteger.
+  const rateLimitKey = getLoginRateLimitKey(getClientAddress(request));
+  const rateLimit = await consumeLoginAttempt(rateLimitKey);
+  if (rateLimit.usedFallback) {
+    console.warn(JSON.stringify({ event: "rate_limit_store_error", operation: "consume" }));
+  }
+  if (!rateLimit.allowed) {
+    clearSession();
+    console.warn(
+      JSON.stringify({ event: "login_blocked", retry_after_seconds: rateLimit.retryAfterSeconds })
+    );
+    return NextResponse.json(
+      { detail: "Demasiados intentos. Vuelve a intentarlo más tarde." },
+      { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } }
+    );
+  }
+
   const passwordOk = hash ? await bcrypt.compare(password, hash) : false;
   if (!passwordOk) {
     clearSession();
+    console.warn(JSON.stringify({ event: "login_failed" }));
     // Mensaje genérico: no revelar si el usuario existe.
     return NextResponse.json({ detail: "Credenciales inválidas." }, { status: 401 });
   }
@@ -100,6 +124,11 @@ export async function POST(request: Request) {
     role: "gerencia",
     expiresAt
   });
+
+  const reset = await resetLoginAttempts(rateLimitKey);
+  if (reset.usedFallback) {
+    console.warn(JSON.stringify({ event: "rate_limit_store_error", operation: "reset" }));
+  }
 
   return NextResponse.json({
     ok: true,

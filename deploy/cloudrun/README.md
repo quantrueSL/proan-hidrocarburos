@@ -73,6 +73,21 @@ bash deploy/cloudrun/deploy.sh
 Para los usuarios normales de la herramienta no hay que desplegar nada: se
 gestionan en la lista de Firestore desde el portal de listas (ver `docs/login/LOGIN.md`).
 
+## Rate limiting del login técnico
+
+`POST /api/auth/login` limita `.htpasswd` a cinco intentos por IP en quince
+minutos. Los contadores viven en la colección `hcarb_login_rate_limits` de la
+base Firestore `proan-lista-mails`; su clave es un HMAC, nunca una IP o usuario.
+Después del primer despliegue que incluya esta función, habilita una vez la TTL
+para que los documentos con `expires_at` se retiren automáticamente:
+
+```bash
+gcloud firestore fields ttls update expires_at \
+  --collection-group=hcarb_login_rate_limits \
+  --database=proan-lista-mails \
+  --enable-ttl --project=proan-quantrue
+```
+
 ## Decisiones y detalles
 
 - **Etiqueta única por despliegue** (`sha-fecha`). Con `:latest`, el spec del
