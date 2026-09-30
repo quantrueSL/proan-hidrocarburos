@@ -5,6 +5,10 @@
 \usepackage[a4paper,margin=2cm]{geometry}
 \usepackage{booktabs}
 \usepackage{longtable}
+\usepackage{xcolor}
+\newcommand{\corregido}[1]{\colorbox{red!25}{\strut #1}}
+\newcommand{\incorporado}[1]{\colorbox{green!25}{\strut #1}}
+\newcommand{\pendiente}[1]{\colorbox{yellow!35}{\strut #1}}
 
 \begin{document}
 
@@ -25,12 +29,17 @@
 \endfoot
 Cerd. Agua Fria Sitio 1 & Agua Fría \\
 Cerd. Agua Fria Sit 1-1 & Agua Fría \\
+\incorporado{Alamo} & \incorporado{Alamo} \\
 Cerd. Bernalejo 1 Sitio 2-3 & Bernalejos \\
 Bernalejo 2 Sitio 3 & Bernalejos \\
+\incorporado{Buena Vista} & \incorporado{Buena Vista} \\
 Las Cajas 1 & Cajas \\
 Las Cajas 2 & Cajas \\
 Las Cajas 3 & Cajas \\
 Las Cajas 4 & Cajas \\
+\incorporado{Calma} & \incorporado{Calma} \\
+\incorporado{Capiro} & \incorporado{Capiro} \\
+\incorporado{Cedros} & \incorporado{Cedros} \\
 Churincio 1 Sitio 2-3 & Churintzios \\
 Churincio & Churintzios \\
 Churincio 4 Sitio 2-3 & Churintzios \\
@@ -43,8 +52,13 @@ Huertecillas 3 Sitio 3 & Huertecillas \\
 Huertecillas 2 Sitio 3 & Huertecillas \\
 Huertecillas 1 Sitio 3 & Huertecillas \\
 Ixtle & Ixtles \\
+\corregido{Ixtle 1} & \corregido{Ixtles} \\
+\corregido{Ixtle 2} & \corregido{Ixtles} \\
+\corregido{Ixtle 3} & \corregido{Ixtles} \\
+\corregido{Ixtle 4} & \corregido{Ixtles} \\
 Nacimientos y proceso de pollita & La Incubadora de Chihuahua \\
 Cerd. La Jara Sitio 2-3 & La Jara \\
+\incorporado{La Fortuna} & \incorporado{La Fortuna} \\
 Labor Sitio 3 & Labores \\
 La Labor 2 Sitio 3 & Labores \\
 Las Palmas 1 & Las Palmas \\
@@ -56,8 +70,8 @@ OLIVARES & Olivares \\
 Cerd. Olivares 3 Sitio 2-3 & Olivares \\
 Cerd. Olivo 5 Sitio 2-3 & Olivo 5 (provisional) \\
 El Olivo & Olivos \\
-Olivares 1 Sitio 3 & Olivos \\
-Olivares 2 Sitio 3 & Olivos \\
+\corregido{Olivares 1 Sitio 3} & \corregido{Olivares} \\
+\corregido{Olivares 2 Sitio 3} & \corregido{Olivares} \\
 Cerd. Olivo 3 Sitio 2-3 & Olivos \\
 Cerd. Olivo 4 Sitio 2-3 & Olivos \\
 Cerd. El Pastor Sitio 3 & Pastor \\
@@ -69,10 +83,10 @@ Cerd. Pato Sitio 2 & Patos \\
 Cerd. Pato Sitio 3-2 & Patos \\
 Cerd. Playita Sitio 2 & Playitas \\
 Cerd. Playita Sitio 3 & Playitas \\
-Administracion Granjas Aves & Por confirmar \\
-Servicios Generales San Luis & Por confirmar \\
-Aviario 3 Esperanza & Por confirmar \\
-Nucleo Aviario Posturas Fienhage & Por confirmar \\
+\pendiente{Administracion Granjas Aves} & \pendiente{Por confirmar} \\
+\pendiente{Servicios Generales San Luis} & \pendiente{Por confirmar} \\
+\pendiente{Aviario 3 Esperanza} & \pendiente{Por confirmar} \\
+\pendiente{Nucleo Aviario Posturas Fienhage} & \pendiente{Por confirmar} \\
 RAMAL & Ramal \\
 La Esperanza 6 & Rancho Cancún \\
 La Esperanza 7 & Rancho Cancún \\
@@ -115,5 +129,11 @@ Cerd. Trilla 1 Sitio 2-3 & Trillas \\
 Cerd. Trilla 2 Sitio 2-3 & Trillas \\
 Cerd. Trilla 3 Sitio 2-3 & Trillas \\
 \end{longtable}
+
+\noindent\corregido{Rojo}: relación corregida.\\
+\incorporado{Verde}: última incorporación, con confianza técnica alta.\\
+\pendiente{Amarillo}: pendiente de confirmación de negocio.\\
+Cuijal ya estaba incluido en Rancho El Cuijal bajo su denominación SAP vigente: La Esperanza 1.\\
+Ixtle 3 (CECO 0000041948) se incorporó al núcleo Ixtles tras confirmación.
 
 \end{document}
