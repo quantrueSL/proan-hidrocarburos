@@ -1,0 +1,237 @@
+\documentclass[10pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{mathptmx}
+\usepackage[spanish]{babel}
+\usepackage[a4paper,margin=0.6cm]{geometry}
+\usepackage{pdflscape}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{xcolor}
+\usepackage{colortbl}
+\usepackage{titlesec}
+\titleformat{\section}{\normalfont\large\bfseries}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\normalfont\normalsize\bfseries}{}{0pt}{}
+\titlespacing*{\section}{0pt}{0pt}{0.6ex}
+\titlespacing*{\subsection}{0pt}{1.2ex}{0.4ex}
+\pagestyle{empty}
+
+% Rojo: hay alguna duda sobre esa asignación.
+\newcommand{\pendiente}[1]{{\setlength{\fboxsep}{0.6pt}\colorbox{red!25}{\strut #1}}}
+\newcommand{\x}{$\times$}
+% Referencia a una nota de la hoja de Notas.
+\newcommand{\nt}[1]{\smash{\raisebox{0.45ex}{\fontsize{6}{6}\selectfont[#1]}}}
+
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.0}
+% Raya gruesa que separa filas (núcleos) de la tabla exterior.
+\newcommand{\nhl}{\noalign{\global\setlength{\arrayrulewidth}{1.5pt}}\hline\noalign{\global\setlength{\arrayrulewidth}{0.25pt}}}
+\setlength{\arrayrulewidth}{0.25pt}
+\setlength{\LTpre}{0pt}
+\setlength{\LTpost}{0pt}
+\setlength{\LTleft}{\fill}
+\setlength{\LTright}{\fill}
+
+\newcommand{\celstretch}{1.04}
+% Ancho exterior de una columna cuyo contenido tiene ancho #1.
+\newcommand{\cw}[1]{\dimexpr#1+2\tabcolsep\relax}
+% Celda centrada, con las líneas separadas por rayas muy finas y grises.
+\newcommand{\cel}[2]{%
+  \begingroup\setlength{\arrayrulewidth}{0.05pt}\arrayrulecolor{black!55}\renewcommand{\arraystretch}{\celstretch}%
+  \begin{tabular}[c]{@{\hspace{\tabcolsep}}>{\centering\arraybackslash}p{#1}@{\hspace{\tabcolsep}}}#2\end{tabular}%
+  \endgroup}
+
+\begin{document}
+
+\begin{landscape}
+\thispagestyle{empty}
+\vspace*{\fill}
+\begin{center}
+\refstepcounter{section}{\large\bfseries\thesection.\ Núcleos que superan el umbral de consumo (75,714 litros de petrolífero)}\par\medskip
+
+\footnotesize
+\begin{tabular}{|@{}m{\cw{0.5cm}}@{}|@{}m{\cw{3.0cm}}@{}|@{}m{\cw{4.3cm}}@{}|@{}m{\cw{3.0cm}}@{}|@{}m{\cw{2.4cm}}@{}|@{}m{\cw{1.3cm}}@{}|@{}m{\cw{1.8cm}}@{}|@{}m{\cw{5.0cm}}@{}|@{}m{\cw{1.0cm}}@{}|@{}m{\cw{1.4cm}}@{}|@{}m{\cw{0.8cm}}@{}|}
+\nhl
+\cel{0.5cm}{\textbf{Nº}} & \cel{3.0cm}{\textbf{Núcleo}} & \cel{4.3cm}{\textbf{CECO}} & \cel{3.0cm}{\textbf{Instalaciones}} & \cel{2.4cm}{\textbf{Tanques}} & \cel{1.3cm}{\textbf{UDR}} & \cel{1.8cm}{\textbf{Supervisor}} & \cel{5.0cm}{\textbf{Encargado}} & \cel{1.0cm}{\textbf{Tipo}} & \cel{1.4cm}{\textbf{Estado}} & \cel{0.8cm}{\textbf{Año}} \\ \nhl
+\cel{0.5cm}{1} & \cel{3.0cm}{Moldeados} & \cel{4.3cm}{Moldeados} & \cel{3.0cm}{Planta de Moldeados} & \cel{2.4cm}{1\x250000} & \cel{1.3cm}{5088} & \cel{1.8cm}{--} & \cel{5.0cm}{--} & \cel{1.0cm}{Planta} & \cel{1.4cm}{Jalisco} & \cel{0.8cm}{2026} \\ \nhl
+\cel{0.5cm}{2} & \cel{3.0cm}{San Isidro} & \cel{4.3cm}{San Isidro 1 \\ \hline San Isidro 3 \\ \hline San Isidro 4} & \cel{3.0cm}{San Isidro} & \cel{2.4cm}{1\x41938} & \cel{1.3cm}{sin UDR\nt{8}} & \cel{1.8cm}{--} & \cel{5.0cm}{--} & \cel{1.0cm}{Aves} & \cel{1.4cm}{Jalisco} & \cel{0.8cm}{2026} \\ \nhl
+\cel{0.5cm}{3} & \cel{3.0cm}{San José} & \cel{4.3cm}{Cerd. San Jose Sitio 2-3} & \cel{3.0cm}{San José} & \cel{2.4cm}{\pendiente{2\x5000\nt{3}}} & \cel{1.3cm}{6160} & \cel{1.8cm}{QUINTIN} & \cel{5.0cm}{Pablo Atilano Gonzalez Aldana} & \cel{1.0cm}{Cerdos} & \cel{1.4cm}{Jalisco} & \cel{0.8cm}{2025\nt{5}} \\ \nhl
+\cel{0.5cm}{4} & \cel{3.0cm}{Santa Cruz} & \cel{4.3cm}{Cerd. Santa Cruz Sitio 2-3} & \cel{3.0cm}{Santa Cruz} & \cel{2.4cm}{4\x5000} & \cel{1.3cm}{5399} & \cel{1.8cm}{LALO} & \cel{5.0cm}{Christopher de Jesús Cruz Jiménez} & \cel{1.0cm}{Cerdos} & \cel{1.4cm}{Jalisco} & \cel{0.8cm}{2025\nt{5}} \\ \nhl
+\cel{0.5cm}{5} & \cel{3.0cm}{Cajas} & \cel{4.3cm}{Las Cajas 1 \\ \hline Las Cajas 2 \\ \hline Las Cajas 3 \\ \hline Las Cajas 4} & \cel{3.0cm}{Caja 1 \\ \hline Caja 2 \\ \hline Caja 3 \\ \hline Caja 4} & \cel{2.4cm}{5\x5000 \\ \hline 5\x5000 \\ \hline 6\x5000 \\ \hline 6\x5000} & \cel{1.3cm}{5098\nt{8} \\ \hline 5096 \\ \hline 5094 \\ \hline 5095} & \cel{1.8cm}{--} & \cel{5.0cm}{--} & \cel{1.0cm}{Aves} & \cel{1.4cm}{Jalisco} & \cel{0.8cm}{2025} \\ \nhl
+\cel{0.5cm}{6} & \cel{3.0cm}{Patos\nt{6}} & \cel{4.3cm}{Pato 1 \\ \hline Pato 2 \\ \hline Pato 3 \\ \hline Pato 4} & \cel{3.0cm}{Pato 1 \\ \hline Pato 2 \\ \hline Pato 3 \\ \hline Pato 4} & \cel{2.4cm}{6\x5000 \\ \hline 6\x5000 \\ \hline 6\x5000 \\ \hline 6\x5000} & \cel{1.3cm}{sin UDR\nt{8}} & \cel{1.8cm}{--} & \cel{5.0cm}{--} & \cel{1.0cm}{Aves} & \cel{1.4cm}{Jalisco} & \cel{0.8cm}{2025} \\ \nhl
+\cel{0.5cm}{7} & \cel{3.0cm}{Ocotes} & \cel{4.3cm}{Ocote 1 \\ \hline Ocote 2} & \cel{3.0cm}{Ocote 1 \\ \hline Ocote 2} & \cel{2.4cm}{4\x5000 \\ \hline \pendiente{4\x5000\nt{3}}} & \cel{1.3cm}{6158 \\ \hline 6159} & \cel{1.8cm}{LALO \\ \hline LALO} & \cel{5.0cm}{Sergio Ezequiel Silva Iñiguez \\ \hline Sergio Leonel de la Torre de la Torre} & \cel{1.0cm}{Cerdos} & \cel{1.4cm}{Jalisco} & \cel{0.8cm}{2025} \\ \nhl
+\cel{0.5cm}{8} & \cel{3.0cm}{Labores\nt{7}} & \cel{4.3cm}{Labor Sitio 3 \\ \hline La Labor 2 Sitio 3} & \cel{3.0cm}{Labor 1 \\ \hline Labor 2} & \cel{2.4cm}{\pendiente{3\x5000\nt{3}} \\ \hline \pendiente{3\x5000\nt{3}}} & \cel{1.3cm}{5395 \\ \hline 5396} & \cel{1.8cm}{ARTURO \\ \hline ARTURO} & \cel{5.0cm}{Angel Muñoz Jimenez \\ \hline Juan Daniel Romo Hernandez} & \cel{1.0cm}{Cerdos} & \cel{1.4cm}{Jalisco} & \cel{0.8cm}{2025} \\ \nhl
+\cel{0.5cm}{9} & \cel{3.0cm}{Tequesquites\nt{7}} & \cel{4.3cm}{TEQUESQUITE \\ \hline Cerd. Tequesquite Sitio 3} & \cel{3.0cm}{Tequesquite 2-1 \\ \hline Tequesquite 2-2 \\ \hline Tequesquite 3} & \cel{2.4cm}{\pendiente{3\x5000\nt{3}} \\ \hline \pendiente{3\x5000\nt{3}} \\ \hline 1\x300} & \cel{1.3cm}{5100\nt{8} \\ \hline 5101 \\ \hline 5102} & \cel{1.8cm}{ARTURO \\ \hline ARTURO \\ \hline ARTURO} & \cel{5.0cm}{Horacio Esqueda Bocanegra \\ \hline Reynaldo Gonzales Tejeda \\ \hline Juan Ramon Meza Velazquez} & \cel{1.0cm}{Cerdos} & \cel{1.4cm}{Jalisco} & \cel{0.8cm}{2025} \\ \nhl
+\cel{0.5cm}{10} & \cel{3.0cm}{Trillas} & \cel{4.3cm}{Cerd. Trilla 1 Sitio 2-3 \\ \hline Cerd. Trilla 2 Sitio 2-3 \\ \hline Cerd. Trilla 3 Sitio 2-3} & \cel{3.0cm}{Trilla 1 \\ \hline Trilla 2 \\ \hline Trilla 3} & \cel{2.4cm}{\pendiente{2\x5000 + 2\x500\nt{3}} \\ \hline 3\x5000 \\ \hline \pendiente{6\x5000\nt{3}}} & \cel{1.3cm}{5124 \\ \hline 5125 \\ \hline 5386} & \cel{1.8cm}{BERNABE \\ \hline BERNABE \\ \hline BERNABE} & \cel{5.0cm}{Guillermo Ramírez Gutiérrez \\ \hline Juan Pablo Silvestre Hernández \\ \hline Juan Pablo Reyes Estrada} & \cel{1.0cm}{Cerdos} & \cel{1.4cm}{Jalisco} & \cel{0.8cm}{2025} \\ \nhl
+\cel{0.5cm}{11} & \cel{3.0cm}{Ixtles\nt{7}} & \cel{4.3cm}{Ixtle \\ \hline Ixtle 1 \\ \hline Ixtle 2 \\ \hline Ixtle 3 \\ \hline Ixtle 4} & \cel{3.0cm}{Ixtle 1 \\ \hline Ixtle 2 \\ \hline Ixtle 3 \\ \hline Ixtle 4} & \cel{2.4cm}{3\x5000 + 1\x500 \\ \hline 3\x5000 + 1\x500 \\ \hline 3\x5000 + 1\x500 \\ \hline 3\x5000 + 1\x500} & \cel{1.3cm}{5111 \\ \hline 5112 \\ \hline 5113 \\ \hline 5709} & \cel{1.8cm}{CHEPE \\ \hline CHEPE \\ \hline CHEPE \\ \hline CHEPE} & \cel{5.0cm}{Juan Carlos Ruiz Espino \\ \hline Concepción Villalobos Villalobos \\ \hline Juan Tomas Martinez Rodríguez \\ \hline Carlos David Rivera Márquez} & \cel{1.0cm}{Cerdos} & \cel{1.4cm}{Jalisco} & \cel{0.8cm}{2025} \\ \nhl
+\cel{0.5cm}{12} & \cel{3.0cm}{Huertecillas} & \cel{4.3cm}{Huertecillas 1 Sitio 3 \\ \hline Huertecillas 2 Sitio 3 \\ \hline Huertecillas 3 Sitio 3} & \cel{3.0cm}{Huertecillas 1 \\ \hline Huertecillas 2 \\ \hline Huertecillas 3} & \cel{2.4cm}{\pendiente{4\x5000\nt{3,4}} \\ \hline \pendiente{4\x5000\nt{3}} \\ \hline \pendiente{4\x5000\nt{4}}} & \cel{1.3cm}{5389 \\ \hline 5390 \\ \hline 6157} & \cel{1.8cm}{DANIEL \\ \hline DANIEL \\ \hline DANIEL} & \cel{5.0cm}{Dario Coyaso Silva \\ \hline Gael Ivan Coyaso Silva \\ \hline Juan Manuel Limon Cervantes} & \cel{1.0cm}{Cerdos} & \cel{1.4cm}{Jalisco} & \cel{0.8cm}{2025} \\ \nhl
+\cel{0.5cm}{13} & \cel{3.0cm}{Olivares\nt{7}} & \cel{4.3cm}{OLIVARES \\ \hline Cerd. Olivares 3 Sitio 2-3 \\ \hline Olivares 1 Sitio 3 \\ \hline Olivares 2 Sitio 3} & \cel{3.0cm}{Olivares 1 \\ \hline Olivares 2 \\ \hline Olivares 3} & \cel{2.4cm}{\pendiente{5\x5000 + 1\x500\nt{3}} \\ \hline 4\x5000 \\ \hline \pendiente{4\x5000\nt{3}}} & \cel{1.3cm}{5116\nt{8} \\ \hline 5381 \\ \hline 5382} & \cel{1.8cm}{DANIEL \\ \hline DANIEL \\ \hline DANIEL} & \cel{5.0cm}{Jose Guadalupe Limon Cervantes \\ \hline Abel Solorsano Collazo \\ \hline Miguel Angel Perez Padilla} & \cel{1.0cm}{Cerdos} & \cel{1.4cm}{Jalisco} & \cel{0.8cm}{2025} \\ \nhl
+\cel{0.5cm}{14} & \cel{3.0cm}{Olivos\nt{7}} & \cel{4.3cm}{El Olivo \\ \hline Cerd. Olivo 3 Sitio 2-3 \\ \hline Cerd. Olivo 4 Sitio 2-3 \\ \hline \pendiente{Cerd. Olivo 5 Sitio 2-3}\nt{1}} & \cel{3.0cm}{Olivo 1 \\ \hline Olivo 2 \\ \hline Olivo 3 \\ \hline Olivo 4 \\ \hline \pendiente{Olivo 5}\nt{1}} & \cel{2.4cm}{\pendiente{4\x5000\nt{3}} \\ \hline 4\x5000 \\ \hline \pendiente{4\x5000\nt{3}} \\ \hline 4\x5000 \\ \hline \pendiente{4\x5000\nt{3}}} & \cel{1.3cm}{5391\nt{8} \\ \hline 5392 \\ \hline 5393 \\ \hline 5708 \\ \hline 5723} & \cel{1.8cm}{QUINTIN \\ \hline QUINTIN \\ \hline QUINTIN \\ \hline QUINTIN \\ \hline QUINTIN} & \cel{5.0cm}{Jose de Jesus Chavez Ramirez \\ \hline Omar Enrique Hernandez Gomez \\ \hline Jose Guadalupe Rayes Murguia \\ \hline Jose Manuel Martinez \\ \hline Raul Christian Limon Rodriguez} & \cel{1.0cm}{Cerdos} & \cel{1.4cm}{Jalisco} & \cel{0.8cm}{2025} \\ \nhl
+\cel{0.5cm}{15} & \cel{3.0cm}{Reproductoras /\newline Reproducción de Aves\nt{2}} & \cel{4.3cm}{Reproduccion de Aves} & \cel{3.0cm}{Atotonilco 1 \\ \hline Atotonilco 2 \\ \hline Atotonilco 3 \\ \hline Villa Ahumada 1 \\ \hline Villa Ahumada 2 \\ \hline Villa Ahumada 3 \\ \hline \pendiente{Planta de Alimentos\nt{2}}} & \cel{2.4cm}{2\x5000 \\ \hline 2\x5000 \\ \hline 2\x5000 \\ \hline 2\x5000 \\ \hline 2\x5000 \\ \hline 2\x5000 \\ \hline 1\x25000} & \cel{1.3cm}{--} & \cel{1.8cm}{--} & \cel{5.0cm}{--} & \cel{1.0cm}{Aves} & \cel{1.4cm}{Chihuahua} & \cel{0.8cm}{2025} \\ \nhl
+\end{tabular}
+\end{center}
+\vspace*{\fill}
+\end{landscape}
+
+\begin{landscape}
+\section{Núcleos que no superan el umbral de consumo}
+\footnotesize\renewcommand{\celstretch}{0.93}
+\begin{longtable}{|@{}m{\cw{3.6cm}}@{}|@{}m{\cw{4.3cm}}@{}|@{}m{\cw{4.3cm}}@{}|@{}m{\cw{3.9cm}}@{}|@{}m{\cw{1.9cm}}@{}|@{}m{\cw{4.8cm}}@{}|@{}m{\cw{1.0cm}}@{}|@{}m{\cw{2.3cm}}@{}|}
+\nhl
+\cel{3.6cm}{\textbf{Núcleo}} & \cel{4.3cm}{\textbf{CECO}} & \cel{4.3cm}{\textbf{Instalaciones}} & \cel{3.9cm}{\textbf{Tanques}} & \cel{1.9cm}{\textbf{Supervisor}} & \cel{4.8cm}{\textbf{Encargado}} & \cel{1.0cm}{\textbf{Tipo}} & \cel{2.3cm}{\textbf{Estado}} \\ \nhl
+\endfirsthead
+\nhl
+\cel{3.6cm}{\textbf{Núcleo}} & \cel{4.3cm}{\textbf{CECO}} & \cel{4.3cm}{\textbf{Instalaciones}} & \cel{3.9cm}{\textbf{Tanques}} & \cel{1.9cm}{\textbf{Supervisor}} & \cel{4.8cm}{\textbf{Encargado}} & \cel{1.0cm}{\textbf{Tipo}} & \cel{2.3cm}{\textbf{Estado}} \\ \nhl
+\endhead
+\cel{3.6cm}{Churintzios\nt{14}} & \cel{4.3cm}{Churincio 1 Sitio 2-3 \\ \hline Churincio \\ \hline Churincio 4 Sitio 2-3 \\ \hline Churintzio Postura} & \cel{4.3cm}{Churintzio 1 \\ \hline Churintzio 2 \\ \hline Churintzio 3 \\ \hline Churintzio 4} & \cel{3.9cm}{3\x5000 \\ \hline \pendiente{3\x5000\nt{9}} \\ \hline \pendiente{3\x5000\nt{9}} \\ \hline \pendiente{3\x5000\nt{9}}} & \cel{1.9cm}{CHEPE \\ \hline CHEPE \\ \hline CHEPE \\ \hline CHEPE} & \cel{4.8cm}{Esaul Ruiz Vázquez \\ \hline Pedro Martinez Elizondo \\ \hline José de Jesús Dávalos Olmeda \\ \hline José de Jesús Dávalos Olmeda} & \cel{1.0cm}{Cerdos} & \cel{2.3cm}{Jalisco} \\ \nhl
+\cel{3.6cm}{Ramal} & \cel{4.3cm}{RAMAL} & \cel{4.3cm}{Ramal} & \cel{3.9cm}{\pendiente{2\x5000 + 1\x1000 + 1\x3750\nt{9}}} & \cel{1.9cm}{LALO} & \cel{4.8cm}{Gabriel Guzmán Herrera} & \cel{1.0cm}{Cerdos} & \cel{2.3cm}{Jalisco} \\ \nhl
+\cel{3.6cm}{Tetillas\nt{14}} & \cel{4.3cm}{Tetillas 1 Sitio 3 \\ \hline Tetillas 2 Sitio 3 \\ \hline Tetillas 3 Sitio 3} & \cel{4.3cm}{Tetillas 1 \\ \hline Tetillas 2 \\ \hline Tetillas 3} & \cel{3.9cm}{\pendiente{4\x5000\nt{9}} \\ \hline 4\x5000 \\ \hline \pendiente{3\x5000\nt{9}}} & \cel{1.9cm}{LALO \\ \hline LALO \\ \hline LALO} & \cel{4.8cm}{Miguel Cortez Albizo \\ \hline Efraín Jiménez Limón \\ \hline Jose Alejandro Collazo Padilla} & \cel{1.0cm}{Cerdos} & \cel{2.3cm}{Jalisco} \\ \nhl
+\cel{3.6cm}{Gato Grande} & \cel{4.3cm}{\pendiente{sin CECO}\nt{15}} & \cel{4.3cm}{Gato Grande} & \cel{3.9cm}{\pendiente{1\x1000\nt{9}}} & \cel{1.9cm}{ARTURO} & \cel{4.8cm}{Ricardo Antonio Moreno Olmos} & \cel{1.0cm}{Cerdos} & \cel{2.3cm}{Jalisco} \\ \nhl
+\cel{3.6cm}{San Felipe} & \cel{4.3cm}{Cerd. San Felipe Sitio 3} & \cel{4.3cm}{San Felipe} & \cel{3.9cm}{\pendiente{1\x500\nt{9}}} & \cel{1.9cm}{ARTURO} & \cel{4.8cm}{Juan Carlos Moreno Olmos} & \cel{1.0cm}{Cerdos} & \cel{2.3cm}{Jalisco} \\ \nhl
+\cel{3.6cm}{Pastor} & \cel{4.3cm}{Cerd. El Pastor Sitio 3} & \cel{4.3cm}{Pastor} & \cel{3.9cm}{\pendiente{1\x1000\nt{9}}} & \cel{1.9cm}{ARTURO} & \cel{4.8cm}{Martin Adrian Rivera Perez} & \cel{1.0cm}{Cerdos} & \cel{2.3cm}{Jalisco} \\ \nhl
+\cel{3.6cm}{Playitas\nt{13}} & \cel{4.3cm}{Cerd. Playita Sitio 2 \\ \hline Cerd. Playita Sitio 3} & \cel{4.3cm}{Playita 2 \\ \hline Playita 3} & \cel{3.9cm}{3\x5000 \\ \hline 1\x1000} & \cel{1.9cm}{BERNABE \\ \hline BERNABE} & \cel{4.8cm}{Rafael Reyes Estrada \\ \hline Jaime Efrén Ramírez Romo} & \cel{1.0cm}{Cerdos} & \cel{2.3cm}{Jalisco} \\ \nhl
+\cel{3.6cm}{Santa Fe} & \cel{4.3cm}{Sta Fe Automatica \\ \hline Cerd. Santa Fe Sitio 3} & \cel{4.3cm}{Santa Fe} & \cel{3.9cm}{\pendiente{1\x5000\nt{9}}} & \cel{1.9cm}{BERNABE} & \cel{4.8cm}{Samuel Hugo Hernández Ramírez} & \cel{1.0cm}{Cerdos} & \cel{2.3cm}{Jalisco} \\ \nhl
+\cel{3.6cm}{La Jara} & \cel{4.3cm}{Cerd. La Jara Sitio 2-3} & \cel{4.3cm}{La Jara} & \cel{3.9cm}{3\x5000} & \cel{1.9cm}{BERNABE} & \cel{4.8cm}{Juan Enrique Muñoz Reyes} & \cel{1.0cm}{Cerdos} & \cel{2.3cm}{Jalisco} \\ \nhl
+\cel{3.6cm}{Estación} & \cel{4.3cm}{Estacion Automatica \\ \hline Cerd. Estacion Sitio 2-3} & \cel{4.3cm}{Estación} & \cel{3.9cm}{3\x5000} & \cel{1.9cm}{BERNABE} & \cel{4.8cm}{Neri Heriberto de la Torre de la Torre} & \cel{1.0cm}{Cerdos} & \cel{2.3cm}{Jalisco} \\ \nhl
+\cel{3.6cm}{Bernalejos} & \cel{4.3cm}{Cerd. Bernalejo 1 Sitio 2-3 \\ \hline Bernalejo 2 Sitio 3} & \cel{4.3cm}{Bernalejo 1 \\ \hline Bernalejo 2} & \cel{3.9cm}{\pendiente{3\x3000 + 1\x5000}\nt{11} \\ \hline 4\x5000} & \cel{1.9cm}{QUINTIN \\ \hline QUINTIN} & \cel{4.8cm}{Jaime Reyes Martinez \\ \hline Juan Reyes Martinez} & \cel{1.0cm}{Cerdos} & \cel{2.3cm}{Jalisco} \\ \nhl
+\cel{3.6cm}{San Juanico\nt{17}} & \cel{4.3cm}{Cerd. San Juanico Sitio 2-3} & \cel{4.3cm}{San Juanico} & \cel{3.9cm}{\pendiente{2\x5000 + 1\x1000\nt{9}}} & \cel{1.9cm}{QUINTIN} & \cel{4.8cm}{Angel de Jesus Martin Del Campo Tavarez} & \cel{1.0cm}{Cerdos} & \cel{2.3cm}{Jalisco} \\ \nhl
+\cel{3.6cm}{Agua Fría\nt{13,16}} & \cel{4.3cm}{Cerd. Agua Fria Sitio 1 \\ \hline Cerd. Agua Fria Sit 1-1} & \cel{4.3cm}{Agua Fría \\ \hline Cuarentena Agua Fría} & \cel{3.9cm}{2\x1000 \\ \hline 1\x1000} & \cel{1.9cm}{--} & \cel{4.8cm}{--} & \cel{1.0cm}{Cerdos} & \cel{2.3cm}{Jalisco} \\ \nhl
+\cel{3.6cm}{Santa Elena\nt{10}} & \cel{4.3cm}{Inic. Sta Elena \\ \hline Cerd. Santa Elena Sitio 1 \\ \hline \pendiente{Cerd. Cuarentena Sta Elena}} & \cel{4.3cm}{Santa Elena \\ \hline Santa Elena (BIO-DRI) \\ \hline \pendiente{Cuarentena Nueva de Santa Elena} \\ \hline \pendiente{Cuarentena Vieja de Santa Elena}} & \cel{3.9cm}{3\x1000 \\ \hline 2\x5000 \\ \hline \pendiente{por confirmar} \\ \hline \pendiente{por confirmar}} & \cel{1.9cm}{--} & \cel{4.8cm}{--} & \cel{1.0cm}{Cerdos} & \cel{2.3cm}{Jalisco} \\ \nhl
+\cel{3.6cm}{Cofradía\nt{13,16}} & \cel{4.3cm}{Cofradia Postura \\ \hline Cofradia Sitio 1} & \cel{4.3cm}{Cofradía \\ \hline Cuarentena Cofradía} & \cel{3.9cm}{2\x4913 + 1\x5000 \\ \hline 1\x300} & \cel{1.9cm}{--} & \cel{4.8cm}{--} & \cel{1.0cm}{Cerdos} & \cel{2.3cm}{Jalisco} \\ \nhl
+\cel{3.6cm}{Media Luna\nt{13,16}} & \cel{4.3cm}{Cerd. Media Luna Sit 1-1} & \cel{4.3cm}{Media Luna \\ \hline Cuarentena Media Luna} & \cel{3.9cm}{2\x4913 + 2\x1000 \\ \hline 1\x300} & \cel{1.9cm}{--} & \cel{4.8cm}{--} & \cel{1.0cm}{Cerdos} & \cel{2.3cm}{Jalisco} \\ \nhl
+\cel{3.6cm}{Santo Domingo\nt{13,16}} & \cel{4.3cm}{Cerd. Cuarentena Santo Domingo} & \cel{4.3cm}{Santo Domingo \\ \hline Cuarentena Santo Domingo} & \cel{3.9cm}{3\x1000 \\ \hline 1\x1000} & \cel{1.9cm}{--} & \cel{4.8cm}{--} & \cel{1.0cm}{Cerdos} & \cel{2.3cm}{Jalisco} \\ \nhl
+\cel{3.6cm}{San Diego} & \cel{4.3cm}{San Diego 1} & \cel{4.3cm}{San Diego 1} & \cel{3.9cm}{12\x5000} & \cel{1.9cm}{--} & \cel{4.8cm}{--} & \cel{1.0cm}{Aves} & \cel{2.3cm}{Jalisco} \\ \nhl
+\cel{3.6cm}{Las Palmas} & \cel{4.3cm}{Las Palmas 1} & \cel{4.3cm}{Las Palmas 1} & \cel{3.9cm}{1\x61183} & \cel{1.9cm}{--} & \cel{4.8cm}{--} & \cel{1.0cm}{Aves} & \cel{2.3cm}{Jalisco} \\ \nhl
+\cel{3.6cm}{La Incubadora de Chihuahua} & \cel{4.3cm}{Nacimientos y proceso de pollita} & \cel{4.3cm}{La Incubadora de Chihuahua} & \cel{3.9cm}{1\x30038} & \cel{1.9cm}{--} & \cel{4.8cm}{--} & \cel{1.0cm}{Aves} & \cel{2.3cm}{Chihuahua} \\ \nhl
+\cel{3.6cm}{Rancho El Mezquite\nt{12}} & \cel{4.3cm}{El Mezquite 1 \\ \hline El Mezquite 2 \\ \hline Posta El Mezquite \\ \hline El Mezquite} & \cel{4.3cm}{Mezquite 1 Lado 1 \\ \hline Mezquite 1 Lado 2 \\ \hline Mezquite 2 \\ \hline \pendiente{Mezquite 3}\nt{12}} & \cel{3.9cm}{1\x82360 \\ \hline 1\x42270 \\ \hline 1\x76000 \\ \hline 1\x89000} & \cel{1.9cm}{--} & \cel{4.8cm}{--} & \cel{1.0cm}{--\nt{18}} & \cel{2.3cm}{San Luis Potosí} \\ \nhl
+\cel{3.6cm}{Rancho El Cuijal\nt{18}} & \cel{4.3cm}{La Esperanza 3 \\ \hline La Esperanza 4 \\ \hline La Esperanza 1 \\ \hline La Esperanza 5 \\ \hline La Esperanza 1 Sitio 1 \\ \hline La esperanza Sitio 2-2 \\ \hline Cepro} & \cel{4.3cm}{Esperanza 1 \\ \hline Esperanza 2 \\ \hline Esperanza 3 \\ \hline Esperanza 4 \\ \hline Esperanza 5 \\ \hline CEPRO} & \cel{3.9cm}{2\x1000 \\ \hline 2\x1000 \\ \hline 2\x1000 \\ \hline 2\x1000 \\ \hline 2\x1000 \\ \hline 2\x5000} & \cel{1.9cm}{--} & \cel{4.8cm}{--} & \cel{1.0cm}{--\nt{18}} & \cel{2.3cm}{San Luis Potosí} \\ \nhl
+\cel{3.6cm}{Rancho Cancún\nt{18}} & \cel{4.3cm}{La Esperanza 6 \\ \hline La Esperanza 7 \\ \hline La Esperanza 8 \\ \hline La Esperanza 9 \\ \hline La Esperanza 10 \\ \hline Nucleo Cancun Mtto} & \cel{4.3cm}{Esperanza 6 \\ \hline Esperanza 7 \\ \hline Esperanza 8 \\ \hline Esperanza 9 \\ \hline Esperanza 10} & \cel{3.9cm}{2\x1000 \\ \hline 2\x1000 \\ \hline 2\x1000 \\ \hline 2\x1000 \\ \hline 2\x1000} & \cel{1.9cm}{--} & \cel{4.8cm}{--} & \cel{1.0cm}{--\nt{18}} & \cel{2.3cm}{San Luis Potosí} \\ \nhl
+\end{longtable}
+\end{landscape}
+
+
+\clearpage
+\newgeometry{margin=1.8cm}
+\thispagestyle{empty}
+\section*{Notas sobre las tablas 1 y 2}
+\normalsize
+\newenvironment{lnotas}{\begin{list}{}{\setlength{\leftmargin}{0.9cm}\setlength{\labelwidth}{0.85cm}\setlength{\labelsep}{0.05cm}\setlength{\itemsep}{1.6pt}\setlength{\parsep}{0pt}\setlength{\topsep}{2pt}\setlength{\listparindent}{0pt}}}{\end{list}}
+\newcommand{\nitem}[1]{\item[\hfill\textbf{[#1]}]}
+
+\textbf{Criterios generales.}
+Instalaciones, tanques y año: diapositivas de cada núcleo, que se toman como fuente correcta.
+Supervisor y encargado: \texttt{GAS.xlsx} (hoja \emph{Hoja1}, columnas F--M); constan solo para algunos núcleos de Jalisco y se muestra ``--'' cuando no hay dato. Las columnas A--D de \texttt{GAS.xlsx} (granja, centro, CECO, supervisor) están ocultas en el Excel y no se han utilizado.
+UDR: Observaciones UDR, solo para los núcleos que superan el umbral.
+CECO: relación CECO--núcleo del documento original (\texttt{Nucleo-CECO.tex}); los CECO se listan por núcleo, sin ligarlos a una instalación concreta, por lo que las líneas de las columnas CECO e Instalaciones no se corresponden entre sí.
+En \pendiente{rojo}: dato dudoso, discrepancia o pendiente de confirmar. El superíndice \nt{n} remite a la nota \nt{n} de esta hoja.
+La tabla 1 sigue la numeración de la tabla de núcleos consolidados; la tabla 2 no está numerada.
+Erratas detectadas en las fuentes: la Propuesta y la Relación Núcleos Jalisco repiten ``Ixtle 2'' y omiten Ixtle 3 (corregido); su numeración de núcleos se repite en varios casos; la tabla consolidada dice ``Trilla 1, Trilla 1 y Trilla 3'' y no lista Tequesquite 3; la Propuesta nombra Tequesquite 1--3 mientras que las Observaciones UDR y \texttt{GAS.xlsx} usan 2-1, 2-2 y 3.
+
+\medskip
+\textbf{Tabla 1. Núcleos que superan el umbral}
+\begin{lnotas}
+\nitem{1} \textbf{Olivo 5.} La tabla consolidada lo incluye en Olivos (Olivo 1--5). La diapositiva indica que está por confirmar si se incluiría en el núcleo o sería independiente, a unos 3 km de Olivo 4. Las Observaciones UDR lo tratan como núcleo independiente por estar alejado. \texttt{GAS.xlsx} lo agrupa en OLIVOS. Se mantiene en Olivos, en rojo. Si fuese independiente (4\x5000, UDR 5723, CECO Cerd. Olivo 5 Sitio 2-3), Olivos quedaría con cuatro instalaciones y habría que comprobar si Olivo 5 supera por sí solo el umbral.
+\nitem{2} \textbf{Reproductoras (Chihuahua).} Diapositiva: Atotonilco 1--3 y Villa Ahumada 1--3 (2\x5000 cada una) y Planta de Alimentos (1\x25000). No hay UDR, supervisor ni encargado (no figuran en \texttt{GAS.xlsx} ni en las Observaciones UDR). El único CECO conocido es el de SAP (Reproduccion de Aves). La Propuesta lista aparte una \emph{Planta de Alimentos PROAN} (SAP: Alimento Planta PROA), sin entidad asignada y sin CECO, en la tabla 3; queda por confirmar si es la misma planta (consulta enviada y sin respuesta; ver la tabla 3).
+\nitem{3} \textbf{Tanques en \texttt{GAS.xlsx} distintos de la diapositiva} (se sigue la diapositiva). San José: 1\x22000 + 1\x5000 frente a 2\x5000. Ocote 2: 4\x5000 + 1\x500 (la diapositiva no incluye el de 500). Labor 1: 3\x5000 + 1\x500. Labor 2: 3\x5000 + 1\x300. Tequesquite 2-1 y 2-2: 5\x5000 cada una frente a 3\x5000. Trilla 1: 1\x5000 + 2\x500 frente a 2\x5000 + 2\x500. Trilla 3: 6\x5000 + 1\x500 frente a 6\x5000. Huertecillas 1: 5\x5000 frente a 4\x5000. Huertecillas 2: 4\x5000 + 1\x500 frente a 4\x5000. Olivares 1: 5\x5000, sin el tanque de 500 (diapositiva: 5\x5000 + 1\x500). Olivares 3: 5\x5000 frente a 4\x5000. Olivo 1, 3 y 5: 4\x5000 + 1\x500 frente a 4\x5000. Coinciden exactamente Santa Cruz, Ocote 1, Tequesquite 3, Trilla 2, Ixtle 1--4, Huertecillas 3, Olivares 2, Olivo 2 y Olivo 4. Moldeados, San Isidro, Cajas, Patos y Reproductoras no figuran en \texttt{GAS.xlsx}.
+\nitem{4} \textbf{Huertecillas 1 y 3.} En sus diapositivas el texto indica 4 tanques de 5,000 y la etiqueta del mapa indica 5. Se ha tomado el texto.
+\nitem{5} \textbf{Año de San José y Santa Cruz.} Las diapositivas y la tabla consolidada indican 2025; la Propuesta y la Relación Núcleos Jalisco indican 2026 (parecen anteriores).
+\nitem{6} \textbf{Patos.} La diapositiva define Patos como granja de aves (Pato 1--4, 6\x5000 cada uno). El bloque PATOS de \texttt{GAS.xlsx} (Patos 2: 5\x5000, Patos 3-1: 1\x500, Patos 3-2: 1\x300, al poniente de Jalostotitlán) son granjas de cerdos, y las Observaciones UDR y la Propuesta indican que Patos Sitio 3 \#2 y Patos Sitio 2 son de cerdos y no deben relacionarse con las de aves. Por ello los CECO Cerd. Pato Sitio 2 y Cerd. Pato Sitio 3-2 pasan a la tabla 3 como \emph{Patos (cerdos)}, pendiente de clasificar y sin diapositiva. Patos 3-1 no tiene CECO conocido.
+\nitem{7} \textbf{CECO por núcleo y no por instalación.} Ixtles: además de Ixtle 1--4 hay un CECO genérico ``Ixtle''; Ixtle 3 (CECO 0000041948) se incorporó tras confirmación. Olivares: CECO genérico ``OLIVARES'', más Olivares 1 y 2 Sitio 3 y Olivares 3 Sitio 2-3. Olivos: ``El Olivo'' es genérico (no se sabe a qué Olivo corresponde). Tequesquites: dos CECO para tres instalaciones. Labores: no está confirmado que ``Labor Sitio 3'' sea Labor 1. Los nombres SAP (``Sitio 2-3'', ``Sitio 3'') no coinciden con los de las instalaciones.
+\nitem{8} \textbf{UDR sin asignar y núcleos sin UDR.} Cajas: 5097 (Baños). Olivos: 5394 (Olivo Aves). Tequesquites: 5379 (Aves) y 6163 (Postura). Olivares: 5384 (Olivares Dos), 5385 (Olivares Tres) y 5115 (Olivares Aves). Están por aclarar si son otras instalaciones, duplicados o de otra línea (aves) no mapeada. Los códigos 5090 y 5641 no tienen descripción. San Isidro y Patos (aves) no tienen UDR localizada (posible proveedor Supergas de los Altos). No hay supervisor ni encargado para Moldeados, San Isidro, Cajas, Patos ni Reproductoras.
+\end{lnotas}
+
+\clearpage
+\thispagestyle{empty}
+\textbf{Notas sobre la tabla 2. Núcleos que no superan el umbral}
+\begin{lnotas}
+\nitem{9} \textbf{Tanques en \texttt{GAS.xlsx} distintos de la diapositiva.} Churintzio 2: 4\x5000 (diapositiva: 3\x5000). Churintzio 3: 2\x5000 + 1\x500 + 1\x300 (3\x5000). Churintzio 4: 4\x5000 + 1\x500 (3\x5000). Ramal: 2\x5000 + 1\x3750, sin el de 1,000 (diapositiva: 2\x5000 + 1\x1000 + 1\x3750). Tetillas 1: 4\x5000 + 1\x500 (4\x5000). Tetillas 3: 4\x5000 + 1\x500 (3\x5000). Gato Grande: 1\x5000 (1\x1000). San Felipe: 1\x1000 + 1\x500 (1\x500). Pastor: 1\x5000 + 1\x1000 (1\x1000). Santa Fe: 1\x1000 (1\x5000). San Juanico: 3\x5000 (2\x5000 + 1\x1000). Coinciden Churintzio 1, Tetillas 2, Playita 2 y 3, La Jara, Estación y Bernalejo 2. Agua Fría, Santa Elena, Cofradía, Media Luna, Santo Domingo, San Diego, Las Palmas, La Incubadora y los ranchos de San Luis Potosí no figuran en \texttt{GAS.xlsx}.
+\nitem{10} \textbf{Santa Elena.} Diapositiva: Santa Elena 3\x1000 y Santa Elena (BIO-DRI) 2\x5000. Cuarentena Nueva y Cuarentena Vieja quedan por confirmar (si forman parte de Santa Elena y cuántos tanques tienen). La Propuesta pide validar su ubicación o existencia. El CECO Cerd. Cuarentena Sta Elena es provisional.
+\nitem{11} \textbf{Bernalejo 1.} La diapositiva se contradice: el texto indica 3\x3000 + 1\x5000 y la etiqueta del mapa indica 4\x5000, que coincide con \texttt{GAS.xlsx}. Se muestra el texto, en rojo.
+\nitem{12} \textbf{Rancho El Mezquite.} Mezquite 1 Lado 1 (1\x82360), Lado 2 (1\x42270), Mezquite 2 (1\x76000) y Mezquite 3 (1\x89000, que aún no se visualiza en Google Earth). No hay CECO específico para Mezquite 3 ni para los lados de Mezquite 1, y ``Admin El Mezquite'' (SAP, Propuesta) no figura en la relación de CECO. La Propuesta pide confirmar la dirección y el nombre del rancho.
+\nitem{13} \textbf{Playitas y cuarentenas.} La Propuesta pedía confirmar si existía Playita 1; la diapositiva solo muestra Playita 2 (3\x5000) y Playita 3 (1\x1000). Las cuarentenas de Agua Fría (1\x1000), Cofradía (1\x300), Media Luna (1\x300) y Santo Domingo (1\x1000), que la Propuesta tenía por confirmar, aparecen en las diapositivas.
+\nitem{14} \textbf{Nombres.} Las diapositivas escriben ``Tetilla''; se usa Tetillas por coherencia con el núcleo y la Propuesta. La diapositiva y la Propuesta dicen Churintzio, mientras que los CECO de SAP dicen Churincio. Los CECO de SAP no llevan tildes (Cofradia, Estacion).
+\nitem{15} \textbf{Gato Grande.} La Propuesta y la diapositiva lo recogen (una instalación, 1\x1000) pero no tiene CECO en la relación CECO--núcleo.
+\nitem{16} \textbf{CECO de cuarentenas y granjas.} Cuarentena Agua Fría, Cuarentena Cofradía y Cuarentena Media Luna no tienen CECO. Santo Domingo solo tiene el CECO de la cuarentena; falta el de la granja (SAP: Santo Domingo S1, según la Propuesta).
+\nitem{17} \textbf{San Juanico.} La Propuesta lo lista dos veces (una sin CeBe SAP asociado y otra como San Juanico Sitio 3); aquí figura en una sola fila.
+\nitem{18} \textbf{Ranchos de San Luis Potosí.} Las diapositivas no indican el tipo (aves o cerdos). La Esperanza 4 figura en la Propuesta como núcleo suelto de Jalisco (sin entidad), pero su CECO está asignado a Rancho El Cuijal, donde ya estaba La Esperanza 1 bajo su denominación SAP vigente. La diapositiva de Cuijal marca en el mapa Esperanza 1--4 y CEPRO, y en el listado añade Esperanza 5. Cuatro CECO de San Luis Potosí siguen sin núcleo (tabla 3).
+\end{lnotas}
+\clearpage
+\restoregeometry
+
+\section{Otros}
+\small Núcleos o CECO que no figuran en ninguna de las dos categorías anteriores; su clasificación está por definir.
+\subsection*{Con CECO, entidad sin definir}
+\small
+\begin{longtable}{|@{}m{\cw{7.5cm}}@{}|@{}m{\cw{7.5cm}}@{}|}
+\nhl
+\cel{7.5cm}{\textbf{Núcleo}} & \cel{7.5cm}{\textbf{CECO}} \\ \nhl
+\endfirsthead
+\nhl
+\cel{7.5cm}{\textbf{Núcleo}} & \cel{7.5cm}{\textbf{CECO}} \\ \nhl
+\endhead
+\cel{7.5cm}{Alamo} & \cel{7.5cm}{Alamo} \\ \nhl
+\cel{7.5cm}{Buena Vista} & \cel{7.5cm}{Buena Vista} \\ \nhl
+\cel{7.5cm}{Calma} & \cel{7.5cm}{Calma} \\ \nhl
+\cel{7.5cm}{Capiro} & \cel{7.5cm}{Capiro} \\ \nhl
+\cel{7.5cm}{Cedros} & \cel{7.5cm}{Cedros} \\ \nhl
+\cel{7.5cm}{La Fortuna} & \cel{7.5cm}{La Fortuna} \\ \nhl
+\end{longtable}
+\subsection*{Patos (cerdos), separado de Patos (aves)}
+\small
+\begin{longtable}{|@{}m{\cw{7.5cm}}@{}|@{}m{\cw{7.5cm}}@{}|}
+\nhl
+\cel{7.5cm}{\textbf{Núcleo}} & \cel{7.5cm}{\textbf{CECO}} \\ \nhl
+\endfirsthead
+\nhl
+\cel{7.5cm}{\textbf{Núcleo}} & \cel{7.5cm}{\textbf{CECO}} \\ \nhl
+\endhead
+\cel{7.5cm}{\pendiente{Patos (cerdos)}} & \cel{7.5cm}{\pendiente{Cerd. Pato Sitio 2} \\ \hline \pendiente{Cerd. Pato Sitio 3-2}} \\ \nhl
+\end{longtable}
+\subsection*{Sin CECO, identificados en SAP}
+\small
+\begin{longtable}{|@{}m{\cw{7.5cm}}@{}|@{}m{\cw{7.5cm}}@{}|}
+\nhl
+\cel{7.5cm}{\textbf{Núcleo}} & \cel{7.5cm}{\textbf{CECO}} \\ \nhl
+\endfirsthead
+\nhl
+\cel{7.5cm}{\textbf{Núcleo}} & \cel{7.5cm}{\textbf{CECO}} \\ \nhl
+\endhead
+\cel{7.5cm}{San Francisco} & \cel{7.5cm}{\pendiente{sin CECO}} \\ \nhl
+\cel{7.5cm}{Santa Clara} & \cel{7.5cm}{\pendiente{sin CECO}} \\ \nhl
+\cel{7.5cm}{Lechones} & \cel{7.5cm}{\pendiente{sin CECO}} \\ \nhl
+\cel{7.5cm}{Huevo PAN} & \cel{7.5cm}{\pendiente{sin CECO}} \\ \nhl
+\cel{7.5cm}{Cerdo de Línea KG} & \cel{7.5cm}{\pendiente{sin CECO}} \\ \nhl
+\cel{7.5cm}{Planta de Alimentos PROAN} & \cel{7.5cm}{\pendiente{sin CECO}} \\ \nhl
+\cel{7.5cm}{Santa Isabel} & \cel{7.5cm}{\pendiente{sin CECO}} \\ \nhl
+\cel{7.5cm}{Posta Los Encinos} & \cel{7.5cm}{\pendiente{sin CECO}} \\ \nhl
+\end{longtable}
+
+\begingroup\footnotesize
+\smallskip
+\noindent\textbf{Consultas enviadas, pendientes de respuesta.}
+\begin{list}{}{\setlength{\leftmargin}{0.5cm}\setlength{\itemsep}{2pt}\setlength{\parsep}{0pt}\setlength{\topsep}{2pt}}
+\item \textbf{Alimento Planta PROA} (Planta de Alimentos PROAN). Se localizó como candidato semántico el CECO 0000042093 -- Ampliación silos planta alimento SJ, pero no presenta movimientos de los proveedores del Excel. Los únicos CECO de Planta PROAN con actividad de esos proveedores son 0000042030 -- Planta Proan Accesos y Jardines y 0000042522 -- Autobaños Planta Pro, que no permiten confirmar una correspondencia con ``Alimento Planta PROA''. Se solicita confirmar cuál es el CECO o centro SAP aplicable.
+\item \textbf{Huevo PAN.} Se identificó el CeBe HPAN, asociado al centro SAP PAN3, pero sus movimientos no contienen CECO. Existe también el CECO genérico 0000047001 -- Huevo, sin evidencia que lo relacione con HPAN ni con los proveedores del Excel. Se solicita confirmar si HPAN debe vincularse a un CECO específico o tratarse como una categoría distinta.
+\item \textbf{Cerdo de Línea KG.} No hay coincidencia exacta en SAP. Hay candidatos relacionados, como 0000047002 -- Cerdo y 0000042217 -- Upgrade Línea Sacrificio, pero ninguno con evidencia suficiente para asociarlo a esta denominación. Se solicita confirmar si es una instalación, un proceso productivo o una categoría de producto, y el CECO o CeBe utilizado.
+\item \textbf{Lechones Sitio 1.} No aparece en el maestro de CECO. Hay movimientos con el término ``Lechón'', pero todos carecen de CECO, CeBe y rama de negocio, por lo que no hay un candidato SAP fiable. Se solicita confirmar el código CECO/CeBe, el centro SAP o la ubicación física correspondiente.
+\end{list}
+\endgroup
+
+\subsection*{Por confirmar (núcleo desconocido)}
+\small
+\begin{longtable}{|@{}m{\cw{7.5cm}}@{}|@{}m{\cw{7.5cm}}@{}|}
+\nhl
+\cel{7.5cm}{\textbf{Núcleo}} & \cel{7.5cm}{\textbf{CECO}} \\ \nhl
+\endfirsthead
+\nhl
+\cel{7.5cm}{\textbf{Núcleo}} & \cel{7.5cm}{\textbf{CECO}} \\ \nhl
+\endhead
+\cel{7.5cm}{\pendiente{Por confirmar}} & \cel{7.5cm}{\pendiente{Administracion Granjas Aves} \\ \hline \pendiente{Servicios Generales San Luis} \\ \hline \pendiente{Aviario 3 Esperanza} \\ \hline \pendiente{Nucleo Aviario Posturas Fienhage}} \\ \nhl
+\end{longtable}
+
+\small
+\medskip
+\noindent Cuijal ya estaba incluido en Rancho El Cuijal bajo su denominación SAP vigente: La Esperanza 1.\\
+Ixtle 3 (CECO 0000041948) se incorporó al núcleo Ixtles tras confirmación.
+
+\end{document}
