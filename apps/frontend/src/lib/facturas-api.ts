@@ -25,6 +25,12 @@ function assertOk(response: Response): Response {
 }
 
 export async function searchFacturas(filters: FacturasSearchFilters): Promise<FacturaMetadata[]> {
+  if (filters.uuid) {
+    // La API solo resuelve el UUID exacto; un 404 es "sin resultados", no un fallo.
+    const response = await facturasFetch(`/v1/facturas/${encodeURIComponent(filters.uuid)}`);
+    if (response.status === 404) return [];
+    return [await assertOk(response).json() as FacturaMetadata];
+  }
   const params = new URLSearchParams();
   if (filters.fecha_desde) params.set("fecha_desde", filters.fecha_desde);
   if (filters.fecha_hasta) params.set("fecha_hasta", filters.fecha_hasta);

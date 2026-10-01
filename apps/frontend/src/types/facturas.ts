@@ -13,6 +13,7 @@ export type FacturaMetadata = {
 };
 
 export type FacturasSearchFilters = {
+  uuid?: string;
   fecha_desde?: string;
   fecha_hasta?: string;
   rfc_emisor?: string[];

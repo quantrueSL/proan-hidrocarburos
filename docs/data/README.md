@@ -22,9 +22,8 @@ decisión concreta.
 - **[`nucleos-y-conciliacion.md`](./nucleos-y-conciliacion.md)** — resumen con
   cifras de los 4 pilares de conciliación (SAP/MSEG/Centro/CECO), el tema de
   **núcleos** (cruce Núcleo↔CeCo propuesto por Methagas, `HCARB_dim_nucleo`)
-  y los problemas/pendientes abiertos de ambos temas — incluida la nota de
-  que las cifras del manual de usuario
-  (`manual/page.tsx`) están desactualizadas frente a producción.
+  y los problemas/pendientes abiertos de ambos temas — incluido cómo el manual
+  de usuario calcula en vivo sus cifras de conciliación.
 
 Para el estado actual de las tablas `HCARB_*`, qué hace cada query y el
 historial de bugs corregidos al ejecutarlas contra BigQuery real, ver

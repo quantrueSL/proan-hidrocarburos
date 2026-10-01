@@ -109,6 +109,25 @@ class QueryConcurrencyTests(unittest.TestCase):
         self.assertIn("WHERE estado_identificacion_ceco = 'confirmado'", rows.call_args.args[0])
         self.assertIn("estado_asignacion_nucleo = 'confirmada'", rows.call_args.args[0])
 
+    def test_dashboard_resumen_counts_conciliation_coverage(self) -> None:
+        # El manual de usuario lee estas columnas: si cambian, sus cifras dejan de ser reales.
+        with patch.object(dashboard_engine, "_rows", return_value=[{"total_facturas": 1}]) as rows:
+            result = dashboard_engine._resumen_estatus("TRUE", [])
+
+        self.assertEqual(result, {"total_facturas": 1})
+        query = rows.call_args.args[0]
+        for fragment in (
+            "COUNTIF(s.estado_sap = 'validada_sap') AS validadas_sap",
+            "COUNTIF(s.confianza_mseg = 'Alta') AS mseg_alta",
+            "COUNTIF(s.werks IS NOT NULL) AS con_sitio",
+            "COUNTIF(s.ceco_sugerido_origen = 'ticket') AS ceco_ticket",
+            "COUNTIF(s.ceco_sugerido_origen = 'proveedor') AS ceco_proveedor",
+            "COUNTIF(s.ceco_sugerido_origen = 'documento') AS ceco_documento",
+            "COUNTIF(s.ceco_sugerido_origen = 'documento_multiple') AS ceco_documento_multiple",
+            "COUNTIF(s.ceco_sugerido IS NULL) AS ceco_sin_sugerencia",
+        ):
+            self.assertIn(fragment, query)
+
     def test_dashboard_detail_removes_internal_total(self) -> None:
         row = {"_total": 3, "uuid": "invoice-1"}
         with patch.object(dashboard_engine, "_rows", return_value=[row]) as rows:

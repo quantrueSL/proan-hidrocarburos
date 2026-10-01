@@ -24,7 +24,7 @@ La herramienta no "calcula" un match exacto — acumula evidencia dentro de los
 límites de lo que cada sistema de origen (CFDI, MSEG, BKPF/BSAK/BSIK, EKBE)
 realmente registra. Ver `naturaleza-de-los-datos.md` para el porqué completo
 de cada uno. Resumen de los 4 pilares, tal como se explican hoy en el propio
-manual de usuario (`apps/frontend/app/(authenticated)/manual/page.tsx:154-509`):
+manual de usuario (`apps/frontend/src/features/manual/manual-workspace.tsx`):
 
 | Pilar | Qué compara | Niveles / resultado | Dónde se calcula |
 |---|---|---|---|
@@ -33,27 +33,38 @@ manual de usuario (`apps/frontend/app/(authenticated)/manual/page.tsx:154-509`):
 | **Centro (sitio)** | Folio → pedido de compra (`sap_purchasing_orders`) → entrada de mercancía (`EKBE`) → planta (`WERKS`) | Centro detectado / sin centro (Compras lo captura a mano) | `ConsultasBigQuery/HCARB_gold_validacion_sap.sql`; `dashboard_engine.py` solo lo consume y agrupa |
 | **CECO** | `KOSTL` del documento MSEG que casó, por 3 reglas en cascada (ticket → proveedor ≥95% → documento completo) | Sugerencia única, reparto exacto por ticket, varias opciones, o `NULL` sin sugerencia (nunca bloquea) | `ConsultasBigQuery/HCARB_gold_validacion_sap.sql`; `aprobacion_engine.py` lo consume y guarda la decisión de Compras |
 
-**Cifras que muestra hoy el manual de usuario** (`manual/page.tsx:158-162`,
-universo declarado ahí: **547 facturas**):
+**Cifras del manual de usuario: se calculan en vivo.** La página del manual
+(`apps/frontend/app/(authenticated)/manual/page.tsx`) las pide al mismo
+resumen del Dashboard sin filtros (`GET /v1/financialbi/hidrocarburos/dashboard`,
+bloque `resumen`, misma caché de 5 min) y las muestra con
+`src/lib/manual-stats.ts`. Ya no hay números fijados en el JSX. Si el servicio
+no responde, o el resumen no trae todas las cifras, el manual muestra "—" y un
+aviso en lugar de un dato falso.
 
-- Cobertura SAP: 91,2%
-- Confianza MSEG alta: 81,4%
-- Centro detectado: 70,4%
-- CECO con varias opciones candidatas: 250 (46%)
-- El mismo modal cita además 123 sugerencias por regla "proveedor" (≥95% a un
-  solo CeCo) y 99 por regla "documento" sin ambigüedad.
+| Cifra del manual | Cómo se calcula (sobre `total_facturas`) | Columna de `resumen` |
+|---|---|---|
+| Cobertura SAP | `estado_sap = 'validada_sap'` | `validadas_sap` |
+| Confianza MSEG alta | `confianza_mseg = 'Alta'` | `mseg_alta` |
+| Centro detectado | `werks IS NOT NULL` (solo el que detecta SAP; no incluye los que Compras captura a mano) | `con_sitio` |
+| CECO con varias opciones | `ceco_sugerido_origen = 'documento_multiple'`: las realmente ambiguas, donde Compras debe elegir | `ceco_documento_multiple` |
+| Reparto por ticket | `ceco_sugerido_origen = 'ticket'` | `ceco_ticket` |
+| Sugerencia por proveedor | `ceco_sugerido_origen = 'proveedor'` (tras la precedencia del ticket) | `ceco_proveedor` |
+| Sugerencia por documento | `ceco_sugerido_origen = 'documento'` | `ceco_documento` |
+| Sin sugerencia | `ceco_sugerido IS NULL` | `ceco_sin_sugerencia` |
 
-### ⚠️ Problema conocido: estas cifras están desactualizadas
+El universo es todo `HCARB_GOLD_CLASIFICACION_FOLIO` (facturas de gas desde
+2026-01-01, sea cual sea su estado de aprobación). Las cifras se refrescan con
+el DAG diario de Airflow; la fecha mostrada en el manual es la de la última
+modificación de esa tabla. El test
+`test_dashboard_resumen_counts_conciliation_coverage` protege las columnas
+anteriores.
 
-`manual/page.tsx` no se ha tocado desde antes de la iteración de la rama
-`Fer` (último commit que lo tocó: `33be381`, muy anterior a `a0fa60d`/`860d1aa`).
-Las cifras de conciliación están **hardcodeadas en el JSX**, no se calculan en
-vivo. Tras el despliegue a producción de sep-2026
-(`ConsultasBigQuery/README.md`, sección "Ejecutado contra producción"), el
-universo pasó de 641 a 650 facturas. Como la fuente sigue recibiendo datos,
-esa cifra tampoco debe tratarse como un total permanente.
+### Histórico: por qué dejaron de ser fijas
 
-**Snapshot verificado directamente contra BigQuery el 2026-09-09:**
+El manual llegó a mostrar 547 facturas / 91,2% / 81,4% / 70,4% / 250 / 123 / 99,
+una foto hardcodeada que caducó (el universo pasó de 547 a 657 y la regla
+"ticket" cambió el significado de las cifras de CECO). Como referencia, el
+snapshot verificado contra BigQuery el 2026-09-09 fue:
 
 - 657 facturas.
 - 611 `validada_sap` (**93,0%**).
@@ -65,16 +76,9 @@ esa cifra tampoco debe tratarse como un total permanente.
   ambiguas: 157 vienen de `documento_multiple` y requieren elegir; en las
   otras 92 el desglose por ticket ya identifica el reparto exacto entre CECO.
 
-El manual sigue mostrando "547 facturas" / "81,4%" / etc. y describe los
-CECO múltiples como si todos fueran alternativas entre las que Compras debe
-elegir. No rompe nada, pero ya no representa ni el volumen ni la semántica
-actuales. Pendiente: sustituir esas cifras por un resumen vivo específico o,
-si no se quiere añadir otra consulta, mostrar únicamente explicación
-cualitativa. Una nueva foto hardcodeada volvería a caducar.
-
 ### Problema estructural (no es un bug, es un límite de datos)
 
-"El problema del CECO" (`manual/page.tsx:439-506`): el CECO no está ligado a
+"El problema del CECO" (modal de `manual-workspace.tsx`): el CECO no está ligado a
 la factura de gas en ningún sistema de origen — ni el pedido de compra ni el
 asiento contable traen esa imputación para estos proveedores. Es un límite de
 **ingesta**, no algo que una query mejor pueda resolver (detalle completo en
@@ -314,5 +318,5 @@ una tabla independiente y el cambio consumidor está en
   núcleos, completa)** → `git show 87c2488^:HALLAZGOS-FER.md` (ya no está en
   el árbol de trabajo)
 - **Copy de producto que ve el usuario final sobre conciliación y CECO**
-  (cifras desactualizadas, ver arriba) →
-  `apps/frontend/app/(authenticated)/manual/page.tsx`
+  (las cifras se calculan en vivo, ver arriba) →
+  `apps/frontend/src/features/manual/manual-workspace.tsx`

@@ -14,6 +14,13 @@ export type DashboardResumen = {
   mseg_alta: number;
   mseg_media: number;
   mseg_sin_evidencia: number;
+  // Conciliación (la lee el manual de usuario): centro detectado y origen de la sugerencia de CECO.
+  con_sitio: number;
+  ceco_ticket: number;
+  ceco_proveedor: number;
+  ceco_documento: number;
+  ceco_documento_multiple: number;
+  ceco_sin_sugerencia: number;
 };
 
 export type DashboardGastoItem = {

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { FacturasApiTerminalGuide } from "./facturas-api-terminal-guide";
 import type { FacturaDocumentType, FacturaMetadata } from "@/types/facturas";
 
 export type RfcSuggestion = { nombre: string; rfc: string };
@@ -10,6 +11,7 @@ type SearchMode = "idle" | "replace" | "append";
 type SearchRequest = { append: boolean; offset: number };
 
 const PAGE_SIZE = 100;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const initialDocuments: SelectedDocuments = { metadata: false, pdf: true, xml: true };
 const dateFormatter = new Intl.DateTimeFormat("es-MX", { dateStyle: "medium" });
 const moneyFormatter = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 2 });
@@ -26,7 +28,7 @@ function readError(response: Response, fallback: string) {
   return response.json().then((body: { detail?: string }) => body.detail || fallback).catch(() => fallback);
 }
 
-function RfcChipsInput({ onChange, suggestions, values }: { onChange: (values: string[]) => void; suggestions: RfcSuggestion[]; values: string[] }) {
+function RfcChipsInput({ disabled, onChange, suggestions, values }: { disabled?: boolean; onChange: (values: string[]) => void; suggestions: RfcSuggestion[]; values: string[] }) {
   const [draft, setDraft] = useState("");
   const normalizedDraft = draft.trim().toLocaleLowerCase("es");
   const matches = normalizedDraft.length >= 2
@@ -39,9 +41,13 @@ function RfcChipsInput({ onChange, suggestions, values }: { onChange: (values: s
   }
   return <label className="api-chip-field"><span>RFC emisor</span><div className="api-chip-input">
     {values.map((value) => <button aria-label={`Eliminar ${value}`} key={value} onClick={() => onChange(values.filter((item) => item !== value))} type="button">{value} ×</button>)}
-    <input aria-autocomplete="list" aria-controls="api-rfc-suggestions" onBlur={() => add()} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === ",") { event.preventDefault(); add(); } }} placeholder={values.length ? "Añadir RFC…" : "Escribe un RFC o proveedor"} value={draft} />
+    <input aria-autocomplete="list" aria-controls="api-rfc-suggestions" disabled={disabled} onBlur={() => add()} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === ",") { event.preventDefault(); add(); } }} placeholder={values.length ? "Añadir RFC…" : "Escribe un RFC o proveedor"} value={draft} />
     {matches.length ? <div className="api-rfc-suggestions" id="api-rfc-suggestions" role="listbox">{matches.map((suggestion) => <button key={suggestion.rfc} onMouseDown={(event) => event.preventDefault()} onClick={() => add(suggestion.rfc)} role="option" type="button"><strong>{suggestion.rfc}</strong><small>{suggestion.nombre}</small></button>)}</div> : null}
   </div></label>;
+}
+
+function SearchButton({ appending, disabled, loading, onClick }: { appending: boolean; disabled: boolean; loading: boolean; onClick: () => void }) {
+  return <button className="hydro-button api-search-button" disabled={disabled} onClick={onClick} type="button">{loading ? <><span aria-hidden="true" className="api-inline-spinner" />{appending ? "Cargando más…" : "Buscando facturas…"}</> : "Buscar facturas"}</button>;
 }
 
 function ResultsSkeleton() {
@@ -60,6 +66,7 @@ export function FacturasApiWorkspace({ apiUrl, initialError, nucleos, rfcSuggest
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
   const [rfcs, setRfcs] = useState<string[]>([]);
+  const [uuid, setUuid] = useState("");
   const [selectedNucleos, setSelectedNucleos] = useState<string[]>([]);
   const [rows, setRows] = useState<FacturaMetadata[]>([]);
   const [offset, setOffset] = useState(0);
@@ -75,15 +82,16 @@ export function FacturasApiWorkspace({ apiUrl, initialError, nucleos, rfcSuggest
   const [downloadStarted, setDownloadStarted] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const closeTerminal = useCallback(() => setTerminalOpen(false), []);
 
   useEffect(() => {
-    if (!terminalOpen) return;
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setTerminalOpen(false); };
+    if (!filtersOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setFiltersOpen(false); };
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", closeOnEscape);
     return () => { document.body.style.overflow = previousOverflow; window.removeEventListener("keydown", closeOnEscape); };
-  }, [terminalOpen]);
+  }, [filtersOpen]);
 
   useEffect(() => {
     if (!downloadStarted) return;
@@ -96,9 +104,14 @@ export function FacturasApiWorkspace({ apiUrl, initialError, nucleos, rfcSuggest
   const loading = searchMode !== "idle";
   const appending = searchMode === "append";
   const replacing = searchMode === "replace";
+  const uuidQuery = uuid.trim();
+  const uuidInvalid = Boolean(uuidQuery) && !UUID_PATTERN.test(uuidQuery);
+  const activeFilters = [fechaDesde, fechaHasta, rfcs.length, uuidQuery, selectedNucleos.length].filter(Boolean).length;
 
   function queryParams(nextOffset: number) {
     const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(nextOffset) });
+    // El UUID es una consulta exacta: el resto de filtros no se envían.
+    if (uuidQuery) { params.set("uuid", uuidQuery); return params; }
     if (fechaDesde) params.set("fecha_desde", fechaDesde);
     if (fechaHasta) params.set("fecha_hasta", fechaHasta);
     rfcs.forEach((rfc) => params.append("rfc_emisor", rfc));
@@ -107,7 +120,7 @@ export function FacturasApiWorkspace({ apiUrl, initialError, nucleos, rfcSuggest
   }
 
   function reset() {
-    setFechaDesde(""); setFechaHasta(""); setRfcs([]); setSelectedNucleos([]); setRows([]); setSelected(new Set()); setHasMore(false); setOffset(0); setSearchError(null); setDownloadError(null); setLastSearch(null);
+    setFechaDesde(""); setFechaHasta(""); setRfcs([]); setUuid(""); setSelectedNucleos([]); setRows([]); setSelected(new Set()); setHasMore(false); setOffset(0); setSearchError(null); setDownloadError(null); setLastSearch(null);
   }
 
   function toggleNucleo(nucleo: string) {
@@ -115,6 +128,7 @@ export function FacturasApiWorkspace({ apiUrl, initialError, nucleos, rfcSuggest
   }
 
   async function search(nextOffset = 0, append = false) {
+    if (uuidInvalid) return;
     setSearchMode(append ? "append" : "replace"); setSearchError(null); setLastSearch({ append, offset: nextOffset });
     if (!append) setFiltersOpen(false);
     try {
@@ -156,7 +170,6 @@ export function FacturasApiWorkspace({ apiUrl, initialError, nucleos, rfcSuggest
     } finally { setDownloading(false); }
   }
 
-  const terminalQuery = `${apiUrl}/v1/facturas?${queryParams(0).toString()}`;
 
   return <div className="api-page">
     <header className="api-header">
@@ -164,18 +177,23 @@ export function FacturasApiWorkspace({ apiUrl, initialError, nucleos, rfcSuggest
       <button className="api-terminal-trigger" onClick={() => setTerminalOpen(true)} type="button"><span>Guía de petición por terminal</span><i aria-hidden="true">↗</i></button>
     </header>
 
-    <section className="api-instructions"><h2>Cómo utilizar esta página</h2><p>Todos los filtros son opcionales. Puedes combinar varios RFC y núcleos; una factura debe coincidir con cualquiera de los valores de cada grupo. Selecciona las facturas y los documentos que quieres incluir antes de descargar el ZIP.</p><p>Las búsquedas muestran hasta 100 facturas por página. Usa <b>Cargar más</b> para continuar; cada ZIP admite hasta 100 facturas para evitar descargas excesivas.</p></section>
-
     <section className="api-filters" aria-label="Filtros de Facturas API">
-      <button aria-expanded={filtersOpen} className="api-filters-toggle" onClick={() => setFiltersOpen((open) => !open)} type="button"><span>Filtros</span><i aria-hidden="true">{filtersOpen ? "−" : "+"}</i></button>
-      {filtersOpen ? <div className="api-filter-content"><div className="api-filter-top">
-          <label><span>Fecha inicio</span><input onChange={(event) => setFechaDesde(event.target.value)} type="date" value={fechaDesde} /></label>
-          <label><span>Fecha fin</span><input onChange={(event) => setFechaHasta(event.target.value)} type="date" value={fechaHasta} /></label>
-          <RfcChipsInput onChange={setRfcs} suggestions={rfcSuggestions} values={rfcs} />
+      <div className="api-filters-bar">
+        <button aria-expanded={filtersOpen} aria-haspopup="dialog" className="api-filters-toggle" onClick={() => setFiltersOpen(true)} type="button"><span>Filtros{activeFilters ? <b className="api-filters-count">{activeFilters}</b> : null}</span><i aria-hidden="true">+</i></button>
+        <div className="api-filter-actions"><SearchButton disabled={loading || uuidInvalid} loading={loading} appending={appending} onClick={() => search()} /><button className="api-reset-button" onClick={reset} type="button">Restablecer</button></div>
+      </div>
+      {filtersOpen ? <div aria-labelledby="api-filters-title" aria-modal="true" className="manual-modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setFiltersOpen(false); }} role="dialog"><article className="api-filter-modal">
+        <header><div><p>Consulta documental</p><h2 id="api-filters-title">Filtros</h2></div><button aria-label="Cerrar filtros" onClick={() => setFiltersOpen(false)} type="button">×</button></header>
+        <div className="api-filter-content"><div className="api-filter-top">
+          <label><span>Fecha inicio</span><input disabled={Boolean(uuidQuery)} onChange={(event) => setFechaDesde(event.target.value)} type="date" value={fechaDesde} /></label>
+          <label><span>Fecha fin</span><input disabled={Boolean(uuidQuery)} onChange={(event) => setFechaHasta(event.target.value)} type="date" value={fechaHasta} /></label>
+          <RfcChipsInput disabled={Boolean(uuidQuery)} onChange={setRfcs} suggestions={rfcSuggestions} values={rfcs} />
+          <label className="api-uuid-field"><span>UUID</span><input aria-invalid={uuidInvalid || undefined} autoComplete="off" onChange={(event) => setUuid(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); search(); } }} placeholder="Pega el UUID de la factura" spellCheck={false} value={uuid} />{uuidInvalid ? <small className="is-invalid">Formato no válido (8-4-4-4-12 caracteres hexadecimales).</small> : uuidQuery ? <small>Búsqueda exacta: se ignoran los demás filtros.</small> : null}</label>
         </div>
-        <div className="api-nucleo-field"><div><span>Núcleos</span>{selectedNucleos.length ? <button onClick={() => setSelectedNucleos([])} type="button">Limpiar selección</button> : null}</div><div className="api-nucleo-grid">{nucleos.map((nucleo) => <label key={nucleo}><input checked={selectedNucleos.includes(nucleo)} onChange={() => toggleNucleo(nucleo)} type="checkbox" /><span>{nucleo}</span></label>)}</div></div>
-      </div> : null}
-      <div className="api-filter-actions"><button className="hydro-button api-search-button" disabled={loading} onClick={() => search()} type="button">{loading ? <><span aria-hidden="true" className="api-inline-spinner" />{appending ? "Cargando más…" : "Buscando facturas…"}</> : "Buscar facturas"}</button><button className="api-reset-button" onClick={reset} type="button">Restablecer</button></div>
+        <div className={`api-nucleo-field${uuidQuery ? " is-disabled" : ""}`}><div><span>Núcleos</span>{selectedNucleos.length ? <button onClick={() => setSelectedNucleos([])} type="button">Limpiar selección</button> : null}</div><div className="api-nucleo-grid">{nucleos.map((nucleo) => <label key={nucleo}><input checked={selectedNucleos.includes(nucleo)} disabled={Boolean(uuidQuery)} onChange={() => toggleNucleo(nucleo)} type="checkbox" /><span>{nucleo}</span></label>)}</div></div>
+        </div>
+        <footer className="api-filter-actions"><button className="api-reset-button" onClick={reset} type="button">Restablecer</button><SearchButton disabled={loading || uuidInvalid} loading={loading} appending={appending} onClick={() => search()} /></footer>
+      </article></div> : null}
     </section>
 
     {searchError ? <section className="api-error" role="alert"><span>{searchError}</span><button disabled={loading} onClick={() => search(lastSearch?.offset ?? 0, lastSearch?.append ?? false)} type="button">Reintentar</button></section> : null}
@@ -184,13 +202,17 @@ export function FacturasApiWorkspace({ apiUrl, initialError, nucleos, rfcSuggest
       <div className="api-table-wrap"><table><thead><tr><th><input aria-label="Seleccionar todas las facturas cargadas" checked={rows.length > 0 && selected.size === rows.length} onChange={(event) => setSelected(event.target.checked ? new Set(rows.map((row) => row.uuid)) : new Set())} type="checkbox" /></th><th>Fecha</th><th>Proveedor / RFC</th><th>Folio</th><th>Total</th><th>Núcleos</th><th>Nombre PDF</th><th>Nombre XML</th></tr></thead><tbody>{rows.map((row) => <tr key={row.uuid}><td><input aria-label={`Seleccionar factura ${row.uuid}`} checked={selected.has(row.uuid)} onChange={(event) => setSelected((current) => { const next = new Set(current); event.target.checked ? next.add(row.uuid) : next.delete(row.uuid); return next; })} type="checkbox" /></td><td>{displayDate(row.fecha)}</td><td><strong>{row.nombre_emisor || "—"}</strong><small>{row.rfc_emisor || "—"}</small></td><td>{row.serie || ""}{row.folio || "—"}</td><td>{row.total == null ? "—" : `${moneyFormatter.format(row.total)} ${row.moneda && row.moneda !== "MXN" ? row.moneda : ""}`}</td><td>{row.nucleos.length ? row.nucleos.join(" · ") : "Sin núcleo confirmado"}</td><td><input aria-label={`Nombre PDF de ${row.uuid}`} onChange={(event) => setNames({ ...names, [row.uuid]: { ...names[row.uuid], pdf: event.target.value } })} value={names[row.uuid]?.pdf ?? defaultName(row, ".pdf")} /></td><td><input aria-label={`Nombre XML de ${row.uuid}`} onChange={(event) => setNames({ ...names, [row.uuid]: { ...names[row.uuid], xml: event.target.value } })} value={names[row.uuid]?.xml ?? defaultName(row, ".xml")} /></td></tr>)}{appending ? <TableLoadingRows /> : null}</tbody></table>{replacing ? <div className="api-results-refresh" role="status"><span aria-hidden="true" className="api-inline-spinner" />Actualizando resultados…</div> : null}</div>
       {selectedRows.length ? <aside aria-label="Descarga de facturas seleccionadas" className="api-selection-bar"><strong>{selectedRows.length} factura{selectedRows.length === 1 ? "" : "s"} seleccionada{selectedRows.length === 1 ? "" : "s"}</strong><div className="api-download-controls">{(Object.keys(documents) as FacturaDocumentType[]).map((document) => <label key={document}><span>{document === "metadata" ? "Metadata" : document.toUpperCase()}</span><input checked={documents[document]} disabled={downloading || loading} onChange={() => setDocuments({ ...documents, [document]: !documents[document] })} role="switch" type="checkbox" /><b>{documents[document] ? "Incluir" : "No incluir"}</b></label>)}<button className="hydro-button api-download-button" disabled={!enabledDocuments.length || downloading || loading} onClick={download} type="button">{downloading ? <><span aria-hidden="true" className="api-inline-spinner" />Preparando ZIP…</> : `Descargar ZIP (${selectedRows.length})`}</button></div>{downloadError ? <p role="alert"><span>{downloadError}</span><button disabled={downloading} onClick={download} type="button">Reintentar descarga</button></p> : null}</aside> : null}
       {hasMore ? <div className="api-load-more"><button disabled={loading} onClick={() => search(offset, true)} type="button">{appending ? "Cargando más…" : "Cargar más"}</button></div> : null}
-    </section> : loading ? <ResultsSkeleton /> : <section className="api-empty"><b>Busca facturas para empezar</b><span>Los filtros son opcionales.</span></section>}
+    </section> : loading ? <ResultsSkeleton /> : lastSearch && !searchError ? <section className="api-empty"><b>Sin resultados</b><span>No hay facturas que coincidan con la búsqueda.</span></section> : <section aria-label="Cómo utilizar esta página" className="api-empty api-howto">
+      <h2>Cómo utilizar esta página</h2>
+      <ol>
+        <li><b>Filtra</b><span>Abre <em>Filtros</em> y acota por fechas, RFC, núcleos o UUID. Todos son opcionales; con varios RFC o núcleos basta que coincida uno.</span></li>
+        <li><b>Busca</b><span>Pulsa <em>Buscar facturas</em>. Se muestran hasta 100 por página; usa <em>Cargar más</em> para continuar.</span></li>
+        <li><b>Descarga</b><span>Selecciona facturas, elige PDF, XML o metadata y descarga el ZIP (hasta 100 facturas).</span></li>
+      </ol>
+    </section>}
 
     {downloadStarted ? <div className="api-toast" role="status">La descarga ha comenzado.</div> : null}
 
-    {terminalOpen ? <div aria-labelledby="api-terminal-title" aria-modal="true" className="manual-modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setTerminalOpen(false); }} role="dialog"><article className="api-terminal-modal"><header><div><p>Integración externa</p><h2 id="api-terminal-title">Guía de petición por terminal</h2><span>Usa una key autorizada en tus propios sistemas; esta página no muestra ni conserva la key.</span></div><button aria-label="Cerrar guía" onClick={() => setTerminalOpen(false)} type="button">×</button></header><div className="api-terminal-modal-body"><section><h3>1. Buscar facturas</h3><p>Los filtros son opcionales. Repite <code>rfc_emisor</code> o <code>nucleo</code> para combinar varios valores; cada grupo se combina con los demás filtros.</p><pre>{`curl -H "x-api-key: TU_API_KEY" "${terminalQuery}"`}</pre></section><section><h3>2. Continuar una búsqueda</h3><p>La respuesta contiene hasta 100 facturas. Incrementa <code>offset</code> para pedir la página siguiente.</p><pre>{`curl -H "x-api-key: TU_API_KEY" "${apiUrl}/v1/facturas?limit=100&offset=100"`}</pre></section><section><h3>3. Descargar documentos</h3><p>Sustituye <code>{"{UUID}"}</code> por el UUID recibido en la búsqueda. <code>-OJ</code> conserva el nombre sugerido por el servidor.</p><pre>{`curl -H "x-api-key: TU_API_KEY" "${apiUrl}/v1/facturas/{UUID}"
-
-curl -H "x-api-key: TU_API_KEY" -OJ "${apiUrl}/v1/facturas/{UUID}/pdf"
-curl -H "x-api-key: TU_API_KEY" -OJ "${apiUrl}/v1/facturas/{UUID}/xml"`}</pre></section></div></article></div> : null}
+    {terminalOpen ? <FacturasApiTerminalGuide apiUrl={apiUrl} filters={{ fechaDesde, fechaHasta, nucleos: selectedNucleos, rfcs, uuid }} onClose={closeTerminal} /> : null}
   </div>;
 }

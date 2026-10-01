@@ -196,7 +196,13 @@ def _resumen_estatus(where: str, params: list[bigquery.ScalarQueryParameter]) ->
         COUNTIF(s.estado_sap = 'validada_sap') AS validadas_sap,
         COUNTIF(s.confianza_mseg = 'Alta') AS mseg_alta,
         COUNTIF(s.confianza_mseg = 'Media') AS mseg_media,
-        COUNTIF(s.confianza_mseg IS NULL) AS mseg_sin_evidencia
+        COUNTIF(s.confianza_mseg IS NULL) AS mseg_sin_evidencia,
+        COUNTIF(s.werks IS NOT NULL) AS con_sitio,
+        COUNTIF(s.ceco_sugerido_origen = 'ticket') AS ceco_ticket,
+        COUNTIF(s.ceco_sugerido_origen = 'proveedor') AS ceco_proveedor,
+        COUNTIF(s.ceco_sugerido_origen = 'documento') AS ceco_documento,
+        COUNTIF(s.ceco_sugerido_origen = 'documento_multiple') AS ceco_documento_multiple,
+        COUNTIF(s.ceco_sugerido IS NULL) AS ceco_sin_sugerencia
       FROM {_FOLIO} f
       LEFT JOIN {_APROBACION} a ON f.uuid = a.uuid
       LEFT JOIN {_ESTATUS_SAT} e ON f.uuid = e.uuid
