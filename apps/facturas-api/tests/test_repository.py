@@ -48,3 +48,48 @@ class BuscarFacturasQueryTests(unittest.TestCase):
         self.assertNotIn("nuc.nucleo IN UNNEST(@nucleo)", query)
         self.assertIn("LIMIT @limit", query)
         self.assertEqual([param.name for param in params], ["limit", "offset"])
+
+    def test_nucleo_id_se_combina_con_el_nombre_en_un_solo_grupo(self):
+        with patch.object(repository, "_rows", return_value=[]) as rows:
+            repository.buscar_facturas(
+                rfc_emisor=None,
+                serie=None,
+                folio=None,
+                fecha_desde=None,
+                fecha_hasta=None,
+                nucleo=["Cajas"],
+                nucleo_id=[19, 22],
+                limit=100,
+                offset=0,
+            )
+
+        query, params = rows.call_args.args
+        plano = " ".join(query.split())
+        self.assertIn("nuc.nucleo IN UNNEST(@nucleo) OR nuc.nucleo_id IN UNNEST(@nucleo_id)", plano)
+        self.assertIn("nuc_ticket.nucleo IN UNNEST(@nucleo) OR nuc_ticket.nucleo_id IN UNNEST(@nucleo_id)", query)
+        self.assertEqual([param.name for param in params], ["nucleo", "nucleo_id", "limit", "offset"])
+        self.assertEqual(params[1].array_type, "INT64")
+        self.assertEqual(params[1].values, [19, 22])
+
+    def test_solo_nucleo_id_no_exige_el_nombre(self):
+        with patch.object(repository, "_rows", return_value=[]) as rows:
+            repository.buscar_facturas(
+                rfc_emisor=None,
+                serie=None,
+                folio=None,
+                fecha_desde=None,
+                fecha_hasta=None,
+                nucleo=None,
+                nucleo_id=[20],
+                limit=100,
+                offset=0,
+            )
+
+        query, params = rows.call_args.args
+        self.assertNotIn("@nucleo)", query.replace("@nucleo_id)", ""))
+        self.assertIn("nuc.nucleo_id IN UNNEST(@nucleo_id)", query)
+        self.assertEqual([param.name for param in params], ["nucleo_id", "limit", "offset"])
+
+    def test_ids_nucleo_validos_devuelve_un_conjunto(self):
+        with patch.object(repository, "_rows", return_value=[{"nucleo_id": 19}, {"nucleo_id": 20}]):
+            self.assertEqual(repository.ids_nucleo_validos(), {19, 20})

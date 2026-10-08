@@ -127,21 +127,33 @@ algo existe fuera del alcance de gas).
 | `GET /v1/facturas/{uuid}` | Metadata: proveedor, folio, importe, estatus de cancelación SAT, links a XML/PDF |
 | `GET /v1/facturas/{uuid}/xml` | El XML reconstruido |
 | `GET /v1/facturas/{uuid}/pdf` | El PDF (representación impresa, con QR); marca "CANCELADO" si aplica |
-| `GET /v1/facturas?rfc_emisor=&serie=&folio=&fecha_desde=&fecha_hasta=&nucleo=&limit=&offset=` | Búsqueda opcional por RFC emisor, identificador "humano", fechas y núcleo — puede devolver varias coincidencias |
+| `GET /v1/facturas?rfc_emisor=&serie=&folio=&fecha_desde=&fecha_hasta=&nucleo=&nucleo_id=&limit=&offset=` | Búsqueda opcional por RFC emisor, identificador "humano", fechas y núcleo (por nombre o por ID) — puede devolver varias coincidencias |
 | `GET /health` | Estado del servicio |
 
 La metadata **no incluye CECO ni el estado del flujo de aprobación interno**
 (Compras/Gerencia) — decisión consciente, ampliable en el futuro si hiciera
 falta.
 
-`nucleo` es el **nombre exacto** del núcleo operativo, no un `nucleo_id`: el
-catálogo de producción no tiene hoy un identificador estable de núcleo. La
-asociación se deriva del CECO de aprobación/SAP y, si existe, de los CECO del
-reparto por ticket; solo cuenta una relación CECO→núcleo confirmada. Las
-respuestas de metadata y búsqueda incluyen `nucleos`, una lista ordenada de
-los nombres confirmados asociados a la factura.
+`nucleo` es el **nombre exacto** del núcleo operativo. `nucleo_id` es el
+**ID numérico de ControlVol** (columna `nucleo_id` de `HCARB_dim_nucleo`), que
+solo existe para los 15 núcleos que superan el umbral de consumo: 19 Moldeados,
+20 Cajas, 21 Patos, 22 San Isidro, 23 Olivos, 24 Ocotes, 25 Labores,
+26 Tequesquites, 27 Trillas, 28 Ixtles, 29 Huertecillas, 30 Olivares,
+31 San José, 32 Santa Cruz y 33 Reproducción de Aves. El resto de núcleos se
+sigue filtrando solo por nombre. Un `nucleo_id` que no existe en el catálogo da
+400 `parametros_invalidos`; uno que no es entero, 422.
 
-`rfc_emisor` y `nucleo` se pueden repetir para buscar cualquiera de varios
+Nombre e ID identifican lo mismo, así que se tratan como un solo grupo: si se
+envían los dos, la factura coincide si cumple cualquiera de ellos (no es un
+AND).
+
+La asociación se deriva del CECO de aprobación/SAP y, si existe, de los CECO
+del reparto por ticket; solo cuenta una relación CECO→núcleo confirmada. Las
+respuestas de metadata y búsqueda incluyen `nucleos`, una lista ordenada de
+los nombres confirmados asociados a la factura, y `nucleo_ids`, la lista
+ordenada de sus ID de ControlVol (vacía si ninguno de sus núcleos tiene ID).
+
+`rfc_emisor`, `nucleo` y `nucleo_id` se pueden repetir para buscar cualquiera de varios
 valores (por ejemplo, `rfc_emisor=AAA&rfc_emisor=BBB`). Los grupos de filtros
 se combinan entre sí con AND. La respuesta conserva su formato de lista;
 `limit` (por defecto y máximo 100) y `offset` permiten recuperar páginas

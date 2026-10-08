@@ -1,4 +1,4 @@
-export type AprobacionOption = { id: string; nombre: string };
+export type AprobacionOption = { id: string; nombre: string; nucleo_id?: number | null };
 
 export type AprobacionInvoice = {
   uuid: string;

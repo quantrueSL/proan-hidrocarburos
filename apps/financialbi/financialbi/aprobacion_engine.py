@@ -333,9 +333,10 @@ def catalogo_nucleo() -> list[dict[str, Any]]:
     docs/data/nucleos-y-conciliacion.md) -- {id: KOSTL, nombre: nucleo} para reusar el
     mismo shape/Map que ya arma el frontend para CECO. Solo expone KOSTL
     identificados cuya asignacion Methagas al nucleo esta confirmada; ambos
-    estados se mantienen separados en la tabla."""
+    estados se mantienen separados en la tabla. `nucleo_id` es el ID de
+    ControlVol (solo nucleos que superan el umbral; NULL en el resto)."""
     query = f"""
-      SELECT ceco AS id, nucleo AS nombre
+      SELECT ceco AS id, nucleo AS nombre, nucleo_id
       FROM {_NUCLEO}
       WHERE estado_identificacion_ceco = 'confirmado'
         AND estado_asignacion_nucleo = 'confirmada'

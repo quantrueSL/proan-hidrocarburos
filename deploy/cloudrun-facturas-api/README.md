@@ -22,7 +22,7 @@ Cliente (con x-api-key)
       ▼
 API Gateway  https://plataforma-hidrocarburos-facturas-gw-3h14pa0v.wn.gateway.dev
   API:      plataforma-hidrocarburos-facturas
-  Config:   facturas-config-20260903-155207  (openapi.yaml de este directorio)
+  Config:   facturas-config-20261008-153819  (openapi.yaml de este directorio)
       │  llama a Cloud Run con la identidad de:
       │  facturas-api-gateway@proan-quantrue.iam.gserviceaccount.com
       ▼

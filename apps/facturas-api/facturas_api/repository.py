@@ -55,7 +55,15 @@ _METADATA_SELECT = """
         COALESCE(reparto.nucleos, CAST([] AS ARRAY<STRING>))
       )) AS nucleo
       ORDER BY nucleo
-    ) AS nucleos
+    ) AS nucleos,
+    ARRAY(
+      SELECT DISTINCT nucleo_id
+      FROM UNNEST(ARRAY_CONCAT(
+        IF(nuc.nucleo_id IS NULL, CAST([] AS ARRAY<INT64>), [nuc.nucleo_id]),
+        COALESCE(reparto.nucleo_ids, CAST([] AS ARRAY<INT64>))
+      )) AS nucleo_id
+      ORDER BY nucleo_id
+    ) AS nucleo_ids
 """
 
 _METADATA_JOINS = f"""
@@ -71,7 +79,8 @@ _METADATA_JOINS = f"""
   LEFT JOIN (
     SELECT
       a_reparto.uuid,
-      ARRAY_AGG(DISTINCT nuc_reparto.nucleo IGNORE NULLS ORDER BY nuc_reparto.nucleo) AS nucleos
+      ARRAY_AGG(DISTINCT nuc_reparto.nucleo IGNORE NULLS ORDER BY nuc_reparto.nucleo) AS nucleos,
+      ARRAY_AGG(DISTINCT nuc_reparto.nucleo_id IGNORE NULLS ORDER BY nuc_reparto.nucleo_id) AS nucleo_ids
     FROM {_APROBACION} a_reparto
     CROSS JOIN UNNEST(JSON_EXTRACT_ARRAY(a_reparto.ceco_por_ticket)) AS ticket_json
     LEFT JOIN {_NUCLEO} nuc_reparto
@@ -113,6 +122,7 @@ def buscar_facturas(
     fecha_desde: str | None,
     fecha_hasta: str | None,
     nucleo: list[str] | None,
+    nucleo_id: list[int] | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> list[dict[str, Any]]:
@@ -142,12 +152,24 @@ def buscar_facturas(
     if fecha_hasta:
         clauses.append("SUBSTR(c.Fecha, 1, 10) <= @fecha_hasta")
         params.append(bigquery.ScalarQueryParameter("fecha_hasta", "STRING", fecha_hasta))
-    if nucleo:
+    if nucleo or nucleo_id:
         # Mismo criterio que el dashboard: un núcleo puede derivarse del CECO
         # único (aprobación/SAP) o de cualquiera de los CECO por ticket.
         # EXISTS evita multiplicar facturas cuando el reparto tiene varios CECO.
+        # Nombre e ID identifican lo mismo, así que forman un solo grupo: la
+        # factura coincide si cumple cualquiera de los dos.
+        directos: list[str] = []
+        por_ticket: list[str] = []
+        if nucleo:
+            directos.append("nuc.nucleo IN UNNEST(@nucleo)")
+            por_ticket.append("nuc_ticket.nucleo IN UNNEST(@nucleo)")
+            params.append(bigquery.ArrayQueryParameter("nucleo", "STRING", nucleo))
+        if nucleo_id:
+            directos.append("nuc.nucleo_id IN UNNEST(@nucleo_id)")
+            por_ticket.append("nuc_ticket.nucleo_id IN UNNEST(@nucleo_id)")
+            params.append(bigquery.ArrayQueryParameter("nucleo_id", "INT64", nucleo_id))
         clauses.append(f"""(
-          nuc.nucleo IN UNNEST(@nucleo)
+          {' OR '.join(directos)}
           OR EXISTS (
             SELECT 1
             FROM UNNEST(JSON_EXTRACT_ARRAY(a.ceco_por_ticket)) AS ticket_json
@@ -155,10 +177,9 @@ def buscar_facturas(
               ON nuc_ticket.ceco = JSON_VALUE(ticket_json, '$.ceco')
               AND nuc_ticket.estado_identificacion_ceco = 'confirmado'
               AND nuc_ticket.estado_asignacion_nucleo = 'confirmada'
-            WHERE nuc_ticket.nucleo IN UNNEST(@nucleo)
+            WHERE {' OR '.join(por_ticket)}
           )
         )""")
-        params.append(bigquery.ArrayQueryParameter("nucleo", "STRING", nucleo))
 
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     query = f"""
@@ -174,6 +195,20 @@ def buscar_facturas(
         bigquery.ScalarQueryParameter("offset", "INT64", offset),
     ])
     return _rows(query, params)
+
+
+def ids_nucleo_validos() -> set[int]:
+    """IDs de núcleo (ControlVol) con asignación confirmada en el catálogo.
+    Sirve para rechazar con 400 un `nucleo_id` que no existe en vez de
+    devolver una lista vacía indistinguible de «núcleo sin facturas»."""
+    query = f"""
+      SELECT DISTINCT nucleo_id
+      FROM {_NUCLEO}
+      WHERE nucleo_id IS NOT NULL
+        AND estado_identificacion_ceco = 'confirmado'
+        AND estado_asignacion_nucleo = 'confirmada'
+    """
+    return {row["nucleo_id"] for row in _rows(query, [])}
 
 
 def get_comprobante_json(uuid: str) -> str | None:

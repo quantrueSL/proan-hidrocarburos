@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { etiquetaNucleo, type NucleoOption } from "@/types/facturas";
 
-export type GuideFilters = { fechaDesde: string; fechaHasta: string; nucleos: string[]; rfcs: string[]; uuid: string };
-type Props = { apiUrl: string; filters: GuideFilters; onClose: () => void };
+export type GuideFilters = { fechaDesde: string; fechaHasta: string; nucleos: NucleoOption[]; rfcs: string[]; uuid: string };
+type Props = { apiUrl: string; catalogo: NucleoOption[]; filters: GuideFilters; onClose: () => void };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TABS = [
@@ -59,7 +60,8 @@ const PARAMETERS: { name: string; type: string; repeatable: boolean; text: strin
   { name: "fecha_desde", type: "Fecha AAAA-MM-DD", repeatable: false, text: "Fecha de emisión mínima, incluida. Solo se compara el día; la hora de la factura se ignora.", example: "2026-01-01" },
   { name: "fecha_hasta", type: "Fecha AAAA-MM-DD", repeatable: false, text: "Fecha de emisión máxima, incluida. No puede ser anterior a fecha_desde (si lo es, la API responde 400).", example: "2026-01-31" },
   { name: "rfc_emisor", type: "Texto", repeatable: true, text: "RFC exacto del proveedor que emitió la factura, en mayúsculas.", example: "AAA010101AAA" },
-  { name: "nucleo", type: "Texto", repeatable: true, text: "Nombre exacto del núcleo, con los mismos acentos y mayúsculas que se ven en la página. No es un identificador numérico.", example: "Agua Fría" },
+  { name: "nucleo", type: "Texto", repeatable: true, text: "Nombre exacto del núcleo, con los mismos acentos y mayúsculas que se ven en la página.", example: "Agua Fría" },
+  { name: "nucleo_id", type: "Entero", repeatable: true, text: "ID numérico del núcleo en ControlVol (19–33). Solo existe para los núcleos que superan el umbral de consumo; el resto se filtra por nombre. Si envías también nucleo, basta con cumplir uno de los dos. Un ID que no existe da 400.", example: "20" },
   { name: "serie", type: "Texto", repeatable: false, text: "Serie de la factura, comparación exacta.", example: "A" },
   { name: "folio", type: "Texto", repeatable: false, text: "Folio de la factura, comparación exacta. Por sí solo no identifica una factura: se repite entre proveedores y ejercicios.", example: "1234" },
   { name: "limit", type: "Entero 1–100", repeatable: false, text: "Cuántas facturas devuelve como máximo la petición. Por defecto y como máximo, 100.", example: "100" },
@@ -74,6 +76,7 @@ const FIELDS: [string, string][] = [
   ["total / moneda", "Importe total como número (sin símbolo ni separador de miles) y la moneda del CFDI, por ejemplo MXN."],
   ["estatus_cancelacion_sat", "Estatus de cancelación ante el SAT, por ejemplo vigente o cancelado. Es null si no hay estatus registrado."],
   ["nucleos", "Lista de núcleos confirmados para la factura. Es una lista vacía si ninguno está confirmado; en esa situación la factura no aparece al filtrar por núcleo."],
+  ["nucleo_ids", "ID de ControlVol de los núcleos confirmados de la factura. Vacía si ninguno tiene ID (solo lo tienen los núcleos que superan el umbral)."],
   ["urls", "Rutas relativas de los documentos. Antepón la URL base para formar la dirección completa."]
 ];
 
@@ -165,7 +168,7 @@ function defaultShell(): Shell {
   return typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent) ? "powershell" : "bash";
 }
 
-export function FacturasApiTerminalGuide({ apiUrl, filters, onClose }: Props) {
+export function FacturasApiTerminalGuide({ apiUrl, catalogo, filters, onClose }: Props) {
   const [tab, setTab] = useState<TabId>("inicio");
   const [shell, setShell] = useState<Shell>(defaultShell);
   const powershell = shell === "powershell";
@@ -187,7 +190,8 @@ export function FacturasApiTerminalGuide({ apiUrl, filters, onClose }: Props) {
   if (filters.fechaDesde) currentParams.push(["fecha_desde", filters.fechaDesde]);
   if (filters.fechaHasta) currentParams.push(["fecha_hasta", filters.fechaHasta]);
   filters.rfcs.forEach((rfc) => currentParams.push(["rfc_emisor", rfc]));
-  filters.nucleos.forEach((nucleo) => currentParams.push(["nucleo", nucleo]));
+  // Con ID de ControlVol se usa nucleo_id; el resto de núcleos solo se filtra por nombre.
+  filters.nucleos.forEach((nucleo) => currentParams.push(nucleo.id == null ? ["nucleo", nucleo.nombre] : ["nucleo_id", String(nucleo.id)]));
   currentParams.push(["limit", "100"], ["offset", "0"]);
   const hasCurrentFilters = currentParams.length > 2;
   const currentCommand = uuidSearch ? curlGet(shell, `${apiUrl}/v1/facturas/${uuid}`) : curlSearch(shell, apiUrl, currentParams);
@@ -272,14 +276,21 @@ export function FacturasApiTerminalGuide({ apiUrl, filters, onClose }: Props) {
             <ul>
               <li><b>Dentro de un mismo parámetro repetido, vale cualquiera (O).</b> <code>rfc_emisor=AAA…&amp;rfc_emisor=BBB…</code> devuelve las facturas de AAA o de BBB.</li>
               <li><b>Entre parámetros distintos deben cumplirse todos (Y).</b> Fechas, RFC, núcleo, serie y folio se acumulan: cuantos más filtros, menos resultados.</li>
+              <li><b><code>nucleo</code> y <code>nucleo_id</code> cuentan como uno solo (O).</b> Son dos formas de nombrar lo mismo: si envías los dos, la factura entra si cumple cualquiera.</li>
               <li><b>El orden es fijo:</b> de la fecha de emisión más reciente a la más antigua.</li>
               <li><b>Si nada coincide</b> la respuesta es <code>[]</code> con código 200, no un error.</li>
             </ul>
           </Step>
-          <Step number={4} title="Por qué usar -G y --data-urlencode">
+          <Step number={4} title="IDs de núcleo (nucleo_id)">
+            <p>Los núcleos que superan el umbral de consumo tienen un ID numérico, el mismo que usa ControlVol. Puedes filtrar con <code>nucleo_id=20</code> en vez de escribir el nombre. El resto de núcleos solo se filtra por nombre con <code>nucleo</code>. Un ID que no está en la tabla da error 400.</p>
+            <div className="api-guide-table-wrap"><table className="api-guide-table"><thead><tr><th>nucleo_id</th><th>Núcleo</th></tr></thead><tbody>
+              {catalogo.filter((nucleo) => nucleo.id != null).map((nucleo) => <tr key={nucleo.id}><td><code>{nucleo.id}</code></td><td>{nucleo.nombre}</td></tr>)}
+            </tbody></table></div>
+          </Step>
+          <Step number={5} title="Por qué usar -G y --data-urlencode">
             <p>Valores como <code>Agua Fría</code> llevan espacios y acentos, que no son válidos tal cual en una URL. <code>-G</code> hace que curl envíe los datos como parámetros de la URL, y <code>--data-urlencode</code> los codifica por ti. Es la forma más segura de evitar errores con nombres de núcleo.</p>
           </Step>
-          <Step number={5} title="Ejemplos">
+          <Step number={6} title="Ejemplos">
             <p><b>Facturas de un mes</b></p>
             <CodeBlock code={search([["fecha_desde", "2026-01-01"], ["fecha_hasta", "2026-01-31"]])} label={label} />
             <p><b>Un proveedor</b></p>
@@ -288,6 +299,8 @@ export function FacturasApiTerminalGuide({ apiUrl, filters, onClose }: Props) {
             <CodeBlock code={search([["rfc_emisor", "AAA010101AAA"], ["rfc_emisor", "BBB020202BBB"]])} label={label} />
             <p><b>Uno o varios núcleos</b></p>
             <CodeBlock code={search([["nucleo", "Agua Fría"], ["nucleo", "Alamo"]])} label={label} />
+            <p><b>Por ID de núcleo</b> (ControlVol; repite el parámetro para varios)</p>
+            <CodeBlock code={search([["nucleo_id", "20"], ["nucleo_id", "21"]])} label={label} />
             <p><b>Combinación:</b> facturas del proveedor AAA010101AAA, en ese núcleo y en ese periodo</p>
             <CodeBlock code={search([["rfc_emisor", "AAA010101AAA"], ["nucleo", "Agua Fría"], ["fecha_desde", "2026-01-01"], ["fecha_hasta", "2026-03-31"]])} label={label} />
             <p><b>Por serie y folio.</b> El folio por sí solo se repite entre proveedores y años, así que combínalo siempre con el RFC del emisor y, si puedes, con fechas.</p>
@@ -311,7 +324,8 @@ export function FacturasApiTerminalGuide({ apiUrl, filters, onClose }: Props) {
     "total": 12345.67,
     "moneda": "MXN",
     "estatus_cancelacion_sat": "vigente",
-    "nucleos": ["Agua Fría"],
+    "nucleos": ["Cajas"],
+    "nucleo_ids": [20],
     "urls": {
       "xml": "/v1/facturas/${EXAMPLE_UUID}/xml",
       "pdf": "/v1/facturas/${EXAMPLE_UUID}/pdf"

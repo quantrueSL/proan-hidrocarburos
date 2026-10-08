@@ -109,6 +109,12 @@ class QueryConcurrencyTests(unittest.TestCase):
         self.assertIn("WHERE estado_identificacion_ceco = 'confirmado'", rows.call_args.args[0])
         self.assertIn("estado_asignacion_nucleo = 'confirmada'", rows.call_args.args[0])
 
+    def test_nucleo_catalog_exposes_controlvol_id(self) -> None:
+        with patch.object(aprobacion_engine, "_rows", return_value=[]) as rows:
+            aprobacion_engine.catalogo_nucleo()
+
+        self.assertIn("SELECT ceco AS id, nucleo AS nombre, nucleo_id", rows.call_args.args[0])
+
     def test_dashboard_resumen_counts_conciliation_coverage(self) -> None:
         # El manual de usuario lee estas columnas: si cambian, sus cifras dejan de ser reales.
         with patch.object(dashboard_engine, "_rows", return_value=[{"total_facturas": 1}]) as rows:

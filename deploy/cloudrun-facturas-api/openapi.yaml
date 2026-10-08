@@ -68,7 +68,17 @@ paths:
           items:
             type: string
           collectionFormat: multi
-          description: Nombre exacto del núcleo operativo; no es un identificador estable.
+          description: Nombre exacto del núcleo operativo.
+        - name: nucleo_id
+          in: query
+          type: array
+          items:
+            type: integer
+          collectionFormat: multi
+          description: >-
+            ID del núcleo en ControlVol (19-33, solo núcleos que superan el
+            umbral de consumo). Un ID inexistente da 400. Se combina con
+            `nucleo` como un solo grupo: basta con cumplir uno de los dos.
         - name: limit
           in: query
           type: integer

@@ -154,7 +154,7 @@ puede derivar un núcleo con este modelo.
 
 | Pieza | Archivo | Qué hace |
 |---|---|---|
-| Tabla de catálogo | `HCARB_dim_nucleo` (`D60_REPORTING`) | `ceco`, `nucleo`, estados independientes de identificación/asignación, `fuente_asignacion`; `estado` se conserva por compatibilidad |
+| Tabla de catálogo | `HCARB_dim_nucleo` (`D60_REPORTING`) | `ceco`, `nucleo`, `nucleo_id`, estados independientes de identificación/asignación, `fuente_asignacion`; `estado` se conserva por compatibilidad |
 | Config de tabla | `apps/financialbi/financialbi/aprobacion_engine.py:36-43` | `_NUCLEO_TABLE` / `_NUCLEO`, mismo patrón que `_FOLIO`/`_SAP`/`_APROBACION` |
 | Catálogo de solo lectura | `aprobacion_engine.py` (`catalogo_nucleo()`) | `{id: ceco, nombre: nucleo}` solo con CECO identificado y asignación confirmada, sin `<datalist>` |
 | Endpoint | `apps/financialbi/financialbi/app.py` | `GET .../aprobacion/catalogo/nucleo` |
@@ -295,6 +295,15 @@ negocio revise primero Agua Fría, Labor, Santo Domingo, Cuijal,
 Olivo/Olivares y Bernalejo: son los cruces donde intervino algo más que una
 coincidencia literal. Una corrección futura puede hacerse por CECO sin cambiar
 el modelo ni el código.
+
+**`nucleo_id` (2026-10-08).** Columna `INT64` nullable con el ID del núcleo en ControlVol, 
+solo para los 15 núcleos que superan el umbral (19 Moldeados, 20 Cajas, 21 Patos, 22 San Isidro, 
+23 Olivos, 24 Ocotes, 25 Labores, 26 Tequesquites, 27 Trillas, 28 Ixtles, 29 Huertecillas, 
+30 Olivares, 31 San José, 32 Santa Cruz, 33 Reproducción de Aves; 41 filas). El resto queda en 
+`NULL`. Los ID 34 y 35 (módulos de diésel) no son núcleos y no están en esta tabla. Se añadió con 
+`ALTER TABLE ... ADD COLUMN` + `UPDATE` por nombre de núcleo; backup previo en 
+`HCARB_dim_nucleo_bak_20261008` (102 filas). **Un `bq load` con `--replace` y el esquema antiguo 
+borraría la columna**: al recargar hay que incluir `nucleo_id` en el esquema y en el origen.
 
 El backup `HCARB_dim_nucleo_bak_20260909` existe en BigQuery y contiene 92
 filas. Debe comprobarse su instante concreto antes de usarlo como restauración,
